@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 퀴즈 모니터링 중일 때 적용되는 보안 스타일 */
+.quiz-security-mode {
+  /* 텍스트 선택 방지 */
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  
+  /* 드래그 방지 */
+  -webkit-user-drag: none !important;
+  -moz-user-drag: none !important;
+  user-drag: none !important;
+  
+  /* 터치 관련 보안 (모바일) */
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  
+  /* 우클릭 방지 */
+  context-menu: none !important;
+  
+  /* 이미지 드래그 방지 */
+  -webkit-user-drag: none !important;
+  -khtml-user-drag: none !important;
+  -moz-user-drag: none !important;
+  -o-user-drag: none !important;
+}
+
+/* 모든 하위 요소에도 적용 */
+.quiz-security-mode * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  
+  -webkit-user-drag: none !important;
+  -moz-user-drag: none !important;
+  user-drag: none !important;
+  
+  -webkit-touch-callout: none !important;
+}
+
+/* 입력 필드는 선택 허용 (퀴즈 응답용) */
+.quiz-security-mode input[type="text"],
+.quiz-security-mode input[type="number"],
+.quiz-security-mode textarea,
+.quiz-security-mode [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+/* 라디오 버튼과 체크박스는 클릭 허용 */
+.quiz-security-mode input[type="radio"],
+.quiz-security-mode input[type="checkbox"],
+.quiz-security-mode button,
+.quiz-security-mode [role="button"] {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  
+  cursor: pointer !important;
+}
+
+/* 보안 경고 스타일 */
+.security-warning {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  max-width: 300px;
+  font-size: 14px;
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* 개발자 도구 감지 시 화면 가리기 */
+.dev-tools-detected {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: #000 !important;
+  color: #fff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 99999 !important;
+  font-size: 24px !important;
+  font-weight: bold !important;
+}
+
+/* 인쇄 방지 */
+@media print {
+  .quiz-security-mode {
+    display: none !important;
+  }
+  
+  .quiz-security-mode::before {
+    content: "인쇄가 금지되어 있습니다.";
+    display: block !important;
+    font-size: 24px;
+    text-align: center;
+    margin-top: 50vh;
+  }
+}
+
+/* F12 키나 우클릭으로 개발자 도구 열기 방지 시각적 피드백 */
+.security-violation-flash {
+  animation: securityFlash 0.5s ease-in-out;
+}
+
+@keyframes securityFlash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(220, 38, 38, 0.1); }
+}
