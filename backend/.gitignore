@@ -37,7 +37,6 @@ out/
 .vscode/
 
 
-application.properties
 application.yml
 rest-api.yaml
 websocket-events.yaml
