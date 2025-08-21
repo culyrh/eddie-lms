@@ -9,8 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 사용자 관리 컨트롤러 (인증이 필요한 기능들)
@@ -100,6 +103,80 @@ public class UserController {
         } catch (Exception e) {
             log.error("Failed to update user info", e);
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 프로필 이미지 업로드
+     */
+    @PostMapping("/profile-image")
+    public ResponseEntity<Map<String, String>> uploadProfileImage(
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
+
+        log.info("POST /api/users/profile-image - requested by: {}", getCurrentUserEmail(authentication));
+
+        try {
+            // 파일 유효성 검사
+            if (file.isEmpty()) {
+                log.warn("Empty file uploaded");
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "파일이 비어있습니다."));
+            }
+
+            // 파일 크기 제한 (5MB)
+            if (file.getSize() > 5 * 1024 * 1024) {
+                log.warn("File size too large: {} bytes", file.getSize());
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "파일 크기는 5MB를 초과할 수 없습니다."));
+            }
+
+            // 파일 타입 검사
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                log.warn("Invalid file type: {}", contentType);
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "이미지 파일만 업로드 가능합니다."));
+            }
+
+            User currentUser = getAuthenticatedUser(authentication);
+            String imageUrl = userService.uploadProfileImage(currentUser, file);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("imageUrl", imageUrl);
+            response.put("message", "프로필 이미지가 성공적으로 업로드되었습니다.");
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid file upload request: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Failed to upload profile image", e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "프로필 이미지 업로드에 실패했습니다."));
+        }
+    }
+
+    /**
+     * 프로필 이미지 삭제
+     */
+    @DeleteMapping("/profile-image")
+    public ResponseEntity<Map<String, String>> deleteProfileImage(Authentication authentication) {
+        log.info("DELETE /api/users/profile-image - requested by: {}", getCurrentUserEmail(authentication));
+
+        try {
+            User currentUser = getAuthenticatedUser(authentication);
+            userService.deleteProfileImage(currentUser);
+
+            return ResponseEntity.ok()
+                    .body(Map.of("message", "프로필 이미지가 성공적으로 삭제되었습니다."));
+
+        } catch (Exception e) {
+            log.error("Failed to delete profile image", e);
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "프로필 이미지 삭제에 실패했습니다."));
         }
     }
 

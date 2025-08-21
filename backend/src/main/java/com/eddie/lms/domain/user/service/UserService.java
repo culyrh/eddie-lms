@@ -5,10 +5,18 @@ import com.eddie.lms.domain.user.dto.response.UserResponse;
 import com.eddie.lms.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -21,6 +29,12 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+
+    @Value("${app.upload.dir:uploads}")
+    private String uploadDir;
+
+    @Value("${app.upload.url:http://localhost:8080/uploads}")
+    private String uploadUrl;
 
     /**
      * 모든 사용자 조회
@@ -74,6 +88,89 @@ public class UserService {
 
         User updatedUser = userRepository.save(currentUser);
         return convertToUserResponse(updatedUser);
+    }
+
+    /**
+     * 프로필 이미지 업로드
+     */
+    @Transactional
+    public String uploadProfileImage(User currentUser, MultipartFile file) {
+        log.info("Uploading profile image for user: {}", currentUser.getEmail());
+
+        try {
+            // 업로드 디렉토리 생성
+            Path uploadPath = Paths.get(uploadDir, "profiles");
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+
+            // 파일명 생성 (UUID + 원본 확장자)
+            String originalFilename = file.getOriginalFilename();
+            String extension = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            }
+            String fileName = UUID.randomUUID().toString() + extension;
+
+            // 파일 저장
+            Path filePath = uploadPath.resolve(fileName);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            // 기존 프로필 이미지 삭제 (새 이미지로 교체 시)
+            deleteOldProfileImage(currentUser);
+
+            // 접근 가능한 URL 생성
+            String imageUrl = uploadUrl + "/profiles/" + fileName;
+
+            // 사용자 프로필 이미지 URL 업데이트
+            currentUser.setProfileImageUrl(imageUrl);
+            userRepository.save(currentUser);
+
+            log.info("Profile image uploaded successfully: {}", imageUrl);
+            return imageUrl;
+
+        } catch (IOException e) {
+            log.error("Failed to upload profile image", e);
+            throw new RuntimeException("프로필 이미지 업로드에 실패했습니다.", e);
+        }
+    }
+
+    /**
+     * 프로필 이미지 삭제
+     */
+    @Transactional
+    public void deleteProfileImage(User currentUser) {
+        log.info("Deleting profile image for user: {}", currentUser.getEmail());
+
+        // 기존 프로필 이미지 파일 삭제
+        deleteOldProfileImage(currentUser);
+
+        // 사용자 프로필 이미지 URL 제거
+        currentUser.setProfileImageUrl(null);
+        userRepository.save(currentUser);
+
+        log.info("Profile image deleted successfully for user: {}", currentUser.getEmail());
+    }
+
+    /**
+     * 기존 프로필 이미지 파일 삭제
+     */
+    private void deleteOldProfileImage(User user) {
+        String oldImageUrl = user.getProfileImageUrl();
+        if (oldImageUrl != null && oldImageUrl.startsWith(uploadUrl)) {
+            try {
+                // URL에서 파일명 추출
+                String fileName = oldImageUrl.substring(oldImageUrl.lastIndexOf("/") + 1);
+                Path oldFilePath = Paths.get(uploadDir, "profiles", fileName);
+
+                if (Files.exists(oldFilePath)) {
+                    Files.delete(oldFilePath);
+                    log.info("Old profile image deleted: {}", oldFilePath);
+                }
+            } catch (IOException e) {
+                log.warn("Failed to delete old profile image: {}", oldImageUrl, e);
+            }
+        }
     }
 
     /**
