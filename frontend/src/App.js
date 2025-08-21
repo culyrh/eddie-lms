@@ -4,7 +4,11 @@ import { Home, Calendar, Settings, Users, BookOpen, ClipboardList, HelpCircle, M
 import BoardPage from './pages/Board/BoardPage';
 import AssignmentPage from './pages/Assignment/AssignmentPage';
 import QuizPage from './pages/Quiz/QuizPage';
+
 import SignupModal from './components/SignupModal';
+
+import TopNavBar from './components/TopNavBar';
+import ProfilePage from './components/ProfilePage';
 
 // ============================================================================
 // API 호출 함수들
@@ -131,6 +135,8 @@ const api = {
     return response.json();
   }
 };
+
+
 
 // ============================================================================
 // 모달 컴포넌트들
@@ -336,6 +342,7 @@ const EddieApp = () => {
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfilePage, setShowProfilePage] = useState(false);
 
   // OAuth 리다이렉트 처리
   useEffect(() => {
@@ -397,6 +404,7 @@ const EddieApp = () => {
     setUsers([]);
     setClassrooms([]);
     setSelectedClassroom(null);
+    setShowProfilePage(false); // 추가
     localStorage.removeItem('accessToken');
     localStorage.removeItem('currentUser');
   };
@@ -516,6 +524,29 @@ const EddieApp = () => {
       alert('클래스룸 참여에 실패했습니다.');
     }
   };
+
+  // 프로필 업데이트
+  const handleUpdateProfile = async (updateData) => {
+    try {
+      const response = await fetch(`${api.baseURL}/users/me`, {
+        method: 'PUT',
+        headers: api.getAuthHeaders(accessToken),
+        body: JSON.stringify(updateData)
+      });
+
+      if (response.ok) {
+        const updatedUser = await response.json();
+        setCurrentUser(updatedUser);
+        return updatedUser;
+      } else {
+        throw new Error('프로필 업데이트 실패');
+      }
+    } catch (error) {
+      console.error('프로필 업데이트 실패:', error);
+      throw error;
+    }
+  };
+
 
   // 모달 전환 함수들 추가
   const switchToSignup = () => {
@@ -683,25 +714,30 @@ const EddieApp = () => {
   // 로그인된 상태 - 메인 애플리케이션
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* 사이드바 */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* 사용자 정보 및 로그아웃 */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="text-sm">
-              <div className="font-medium">{currentUser.name}</div>
-              <div className="text-gray-500">{currentUser.userType}</div>
-              <div className="text-xs text-gray-400">{currentUser.email}</div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-            >
-              로그아웃
-            </button>
-          </div>
-        </div>
+      {/* 상단바 - 전체 화면 상단에 고정 */}
+      {currentUser && (
+        <TopNavBar 
+          user={currentUser} 
+          onLogout={handleLogout}
+          onProfileClick={() => setShowProfilePage(true)}
+        />
+      )}
 
+      {/* 프로필 페이지 모달 */}
+      {showProfilePage && (
+        <div className="fixed inset-0 bg-white z-50">
+          <ProfilePage 
+            user={currentUser}
+            onUpdateProfile={handleUpdateProfile}
+            onClose={() => setShowProfilePage(false)}
+          />
+        </div>
+      )}
+
+      {/* 사이드바 - 상단바 아래로 위치 조정 */}
+      <div className={`w-64 bg-white border-r border-gray-200 flex flex-col ${
+        currentUser ? 'mt-16' : ''
+      }`}>
         {/* 네비게이션 메뉴 */}
         <div className="p-4">
           <div className="space-y-2">
@@ -741,7 +777,7 @@ const EddieApp = () => {
               </button>
             </div>
           </div>
-          
+        
           {isLoading ? (
             <div className="text-sm text-gray-500">로딩 중...</div>
           ) : (
@@ -765,8 +801,10 @@ const EddieApp = () => {
         </div>
       </div>
 
-      {/* 메인 컨텐츠 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 메인 컨텐츠 - 상단바 아래로 위치 조정 */}
+      <div className={`flex-1 flex flex-col overflow-hidden ${
+        currentUser ? 'mt-16' : ''
+      }`}>
         {/* 탭 네비게이션 */}
         {selectedClassroom && (
           <div className="bg-white border-b border-gray-200 px-6 py-4">
