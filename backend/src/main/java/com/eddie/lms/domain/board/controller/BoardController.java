@@ -1,5 +1,6 @@
 package com.eddie.lms.domain.board.controller;
 
+import com.eddie.lms.domain.board.service.BoardService;
 import com.eddie.lms.domain.board.dto.request.CommentCreateRequest;
 import com.eddie.lms.domain.board.dto.request.PostCreateRequest;
 import com.eddie.lms.domain.board.dto.request.PostUpdateRequest;
