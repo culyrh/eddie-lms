@@ -4,6 +4,8 @@ import { Home, Calendar, Settings, Users, BookOpen, ClipboardList, HelpCircle, M
 import BoardPage from './pages/Board/BoardPage';
 import AssignmentPage from './pages/Assignment/AssignmentPage';
 import QuizPage from './pages/Quiz/QuizPage';
+import LessonPage from './pages/Lesson/LessonPage';
+import LessonForm from './pages/Lesson/LessonForm';
 
 import SignupModal from './components/SignupModal';
 
@@ -593,9 +595,10 @@ const EddieApp = () => {
         );
       case '수업':
         return (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-gray-500">수업 페이지 - 곧 구현 예정</p>
-          </div>
+          <LessonPage 
+            classroom={selectedClassroom} 
+            currentUser={currentUser}
+          />
         );
       case '퀴즈':
         return (

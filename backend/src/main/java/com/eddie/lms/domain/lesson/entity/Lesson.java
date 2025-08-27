@@ -1,6 +1,3 @@
-// 수업 정보를 담는 엔티티 (기본 구조만 구현)
-// 추후 커리큘럼, 교육 자료 등과 연결 예정
-
 package com.eddie.lms.domain.lesson.entity;
 
 import jakarta.persistence.*;
@@ -9,12 +6,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * 수업 엔티티 (임시 - 나중에 확장 예정)
+ * 수업 엔티티
  */
 @Entity
-@Table(name = "lesson")
+@Table(name = "lessons")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,11 +26,31 @@ public class Lesson {
     @Column(name = "lesson_id")
     private Long lessonId;
 
-    @Column(name = "title", nullable = false)
+    @Column(name = "curriculum_id")
+    private Long curriculumId;
+
+    @Column(name = "classroom_id", nullable = false)
+    private Long classroomId;
+
+    @Column(name = "title", nullable = false, length = 255)
     private String title;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lesson_type", nullable = false, length = 20)
+    private LessonType lessonType;
+
+    @Column(name = "scheduled_at")
+    private LocalDateTime scheduledAt;
+
+    @Column(name = "duration_minutes")
+    private Integer durationMinutes;
+
+    @Column(name = "is_completed", nullable = false)
+    @Builder.Default
+    private Boolean isCompleted = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -40,4 +59,119 @@ public class Lesson {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    // 학습 자료와의 연관관계 (OneToMany)
+    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<LearningMaterial> materials = new ArrayList<>();
+
+    // 학습 진도와의 연관관계 (OneToMany)
+    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<LearningProgress> progressList = new ArrayList<>();
+
+    /**
+     * 수업 유형 열거형
+     */
+    public enum LessonType {
+        VIDEO("영상 수업"),
+        DOCUMENT("자료 수업");
+
+        private final String displayName;
+
+        LessonType(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+    }
+
+    /**
+     * 학습 자료 추가
+     */
+    public void addMaterial(LearningMaterial material) {
+        materials.add(material);
+        material.setLesson(this);
+    }
+
+    /**
+     * 학습 자료 제거
+     */
+    public void removeMaterial(LearningMaterial material) {
+        materials.remove(material);
+        material.setLesson(null);
+    }
+
+    /**
+     * 학습 진도 추가
+     */
+    public void addProgress(LearningProgress progress) {
+        progressList.add(progress);
+        progress.setLesson(this);
+    }
+
+    /**
+     * 수업 완료 상태 토글
+     */
+    public void toggleCompletion() {
+        this.isCompleted = !this.isCompleted;
+    }
+
+    /**
+     * 수업 정보 업데이트
+     */
+    public void updateInfo(String title, String description, LessonType lessonType,
+                           LocalDateTime scheduledAt, Integer durationMinutes) {
+        if (title != null && !title.trim().isEmpty()) {
+            this.title = title.trim();
+        }
+        if (description != null) {
+            this.description = description.trim();
+        }
+        if (lessonType != null) {
+            this.lessonType = lessonType;
+        }
+        if (scheduledAt != null) {
+            this.scheduledAt = scheduledAt;
+        }
+        if (durationMinutes != null && durationMinutes > 0) {
+            this.durationMinutes = durationMinutes;
+        }
+    }
+
+    /**
+     * 특정 커리큘럼에 속하는지 확인
+     */
+    public boolean belongsToCurriculum(Long curriculumId) {
+        return this.curriculumId != null && this.curriculumId.equals(curriculumId);
+    }
+
+    /**
+     * 수업이 시작 가능한지 확인 (항상 접근 가능)
+     */
+    public boolean canStart() {
+        return true; // 업로드된 영상/자료는 언제든 접근 가능
+    }
+
+    /**
+     * 수업 상태 확인
+     */
+    public String getStatus() {
+        if (isCompleted) {
+            return "완료됨";
+        }
+
+        if (scheduledAt == null) {
+            return "등록됨";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(scheduledAt)) {
+            return "예정됨";
+        } else {
+            return "수강 가능";
+        }
+    }
 }
