@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 수업 서비스
+ * 수업 서비스 (실시간 세션 관련 코드 제거)
  */
 @Slf4j
 @Service
@@ -43,15 +43,13 @@ public class LessonService {
             validateCurriculumExists(request.getCurriculumId(), classroomId);
         }
 
-        // 수업 엔티티 생성
+        // 수업 엔티티 생성 (실시간 세션 필드 제거)
         Lesson lesson = Lesson.builder()
                 .classroomId(classroomId)
                 .curriculumId(request.getCurriculumId())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .lessonType(request.getLessonType())
-                .scheduledAt(request.getScheduledAt())
-                .durationMinutes(request.getDurationMinutes())
                 .isCompleted(false)
                 .build();
 
@@ -80,13 +78,11 @@ public class LessonService {
             validateCurriculumExists(request.getCurriculumId(), classroomId);
         }
 
-        // 수업 정보 업데이트
+        // 수업 정보 업데이트 (실시간 세션 필드 제거)
         lesson.updateInfo(
                 request.getTitle(),
                 request.getDescription(),
-                request.getLessonType(),
-                request.getScheduledAt(),
-                request.getDurationMinutes()
+                request.getLessonType()
         );
 
         if (request.getCurriculumId() != null) {
@@ -227,7 +223,7 @@ public class LessonService {
         Curriculum curriculum = findCurriculumByIdAndClassroom(curriculumId, classroomId);
 
         // 커리큘럼에 속한 수업들의 curriculumId를 null로 변경
-        List<Lesson> lessons = lessonRepository.findByCurriculumIdOrderByScheduledAtAsc(curriculumId);
+        List<Lesson> lessons = lessonRepository.findByCurriculumIdOrderByCreatedAtAsc(curriculumId);
         lessons.forEach(lesson -> lesson.setCurriculumId(null));
         lessonRepository.saveAll(lessons);
 
@@ -454,7 +450,7 @@ public class LessonService {
     }
 
     // ============================================================================
-    // 변환 메서드
+    // 변환 메서드 (실시간 세션 관련 제거)
     // ============================================================================
 
     private LessonResponse convertToLessonResponse(Lesson lesson, Long userId) {
@@ -479,8 +475,6 @@ public class LessonService {
         response.setDescription(lesson.getDescription());
         response.setLessonType(lesson.getLessonType());
         response.setLessonTypeName(lesson.getLessonType().getDisplayName());
-        response.setScheduledAt(lesson.getScheduledAt());
-        response.setDurationMinutes(lesson.getDurationMinutes());
         response.setIsCompleted(lesson.getIsCompleted());
         response.setStatus(lesson.getStatus());
         response.setCreatedAt(lesson.getCreatedAt());
@@ -535,7 +529,7 @@ public class LessonService {
 
     private CurriculumResponse convertToCurriculumResponse(Curriculum curriculum) {
         // 포함된 수업들
-        List<Lesson> lessons = lessonRepository.findByCurriculumIdOrderByScheduledAtAsc(curriculum.getCurriculumId());
+        List<Lesson> lessons = lessonRepository.findByCurriculumIdOrderByCreatedAtAsc(curriculum.getCurriculumId());
         List<LessonResponse> lessonResponses = lessons.stream()
                 .map(lesson -> convertToLessonResponse(lesson, null))
                 .collect(Collectors.toList());

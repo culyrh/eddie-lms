@@ -47,9 +47,9 @@ public class Curriculum {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // 수업들과의 연관관계 (OneToMany)
+    // 수업들과의 연관관계 (OneToMany) - createdAt 순으로 변경
     @OneToMany(mappedBy = "curriculumId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @OrderBy("scheduledAt ASC")
+    @OrderBy("createdAt ASC")
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();
 
@@ -99,40 +99,25 @@ public class Curriculum {
     }
 
     /**
-     * 다음 수업 조회
+     * 다음 수업 조회 (실시간 세션 필드 제거)
      */
     public Lesson getNextLesson() {
         if (lessons == null) {
             return null;
         }
 
+        // 미완료 수업 중 가장 먼저 생성된 것 반환
         return lessons.stream()
                 .filter(lesson -> !lesson.getIsCompleted())
-                .min((l1, l2) -> {
-                    if (l1.getScheduledAt() == null && l2.getScheduledAt() == null) {
-                        return 0;
-                    }
-                    if (l1.getScheduledAt() == null) {
-                        return 1;
-                    }
-                    if (l2.getScheduledAt() == null) {
-                        return -1;
-                    }
-                    return l1.getScheduledAt().compareTo(l2.getScheduledAt());
-                })
+                .min((l1, l2) -> l1.getCreatedAt().compareTo(l2.getCreatedAt()))
                 .orElse(null);
     }
 
     /**
-     * 커리큘럼의 총 소요 시간 계산 (분)
+     * 커리큘럼의 총 소요 시간 계산 (분) - 실시간 세션 관련 제거
      */
     public int getTotalDurationMinutes() {
-        if (lessons == null) {
-            return 0;
-        }
-        return lessons.stream()
-                .filter(lesson -> lesson.getDurationMinutes() != null)
-                .mapToInt(Lesson::getDurationMinutes)
-                .sum();
+        // durationMinutes 필드가 없으므로 0 반환 또는 다른 로직으로 대체
+        return 0;
     }
 }

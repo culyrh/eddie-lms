@@ -42,12 +42,6 @@ public class Lesson {
     @Column(name = "lesson_type", nullable = false, length = 20)
     private LessonType lessonType;
 
-    @Column(name = "scheduled_at")
-    private LocalDateTime scheduledAt;
-
-    @Column(name = "duration_minutes")
-    private Integer durationMinutes;
-
     @Column(name = "is_completed", nullable = false)
     @Builder.Default
     private Boolean isCompleted = false;
@@ -71,7 +65,7 @@ public class Lesson {
     private List<LearningProgress> progressList = new ArrayList<>();
 
     /**
-     * 수업 유형 열거형
+     * 수업 유형 열거형 (실시간 세션 제거)
      */
     public enum LessonType {
         VIDEO("영상 수업"),
@@ -122,8 +116,7 @@ public class Lesson {
     /**
      * 수업 정보 업데이트
      */
-    public void updateInfo(String title, String description, LessonType lessonType,
-                           LocalDateTime scheduledAt, Integer durationMinutes) {
+    public void updateInfo(String title, String description, LessonType lessonType) {
         if (title != null && !title.trim().isEmpty()) {
             this.title = title.trim();
         }
@@ -132,12 +125,6 @@ public class Lesson {
         }
         if (lessonType != null) {
             this.lessonType = lessonType;
-        }
-        if (scheduledAt != null) {
-            this.scheduledAt = scheduledAt;
-        }
-        if (durationMinutes != null && durationMinutes > 0) {
-            this.durationMinutes = durationMinutes;
         }
     }
 
@@ -149,29 +136,19 @@ public class Lesson {
     }
 
     /**
-     * 수업이 시작 가능한지 확인 (항상 접근 가능)
+     * 수업이 시작 가능한지 확인 (업로드된 자료는 언제든 접근 가능)
      */
     public boolean canStart() {
-        return true; // 업로드된 영상/자료는 언제든 접근 가능
+        return true;
     }
 
     /**
-     * 수업 상태 확인
+     * 수업 상태 확인 (실시간 세션 관련 제거)
      */
     public String getStatus() {
         if (isCompleted) {
             return "완료됨";
         }
-
-        if (scheduledAt == null) {
-            return "등록됨";
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(scheduledAt)) {
-            return "예정됨";
-        } else {
-            return "수강 가능";
-        }
+        return "수강 가능";
     }
 }
