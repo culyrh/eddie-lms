@@ -27,6 +27,9 @@ public class CorsConfig {
         // 인증 정보 포함 허용
         configuration.setAllowCredentials(true);
 
+        // S3 업로드를 위해 추가
+        configuration.setExposedHeaders(Arrays.asList("Authorization", "ETag"));
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
 

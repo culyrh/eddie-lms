@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * 수업 관리 컨트롤러
- * 클래스룸별 수업 CRUD + 커리큘럼 관리 + 학습 진도 추적
+ * 클래스룸별 수업 CRUD + 커리큘럼 관리 (진도 추적 기능 제거됨)
  */
 @Slf4j
 @RestController
@@ -54,7 +54,7 @@ public class LessonController {
      * 클래스룸 수업 목록 조회
      */
     @GetMapping
-    public ResponseEntity<List<LessonResponse>> getLessons(
+    public ResponseEntity<List<LessonResponse>> getLessonsByClassroom(
             @PathVariable Long classroomId,
             @RequestParam Long userId) {
 
@@ -73,13 +73,12 @@ public class LessonController {
      * 특정 수업 상세 조회
      */
     @GetMapping("/{lessonId}")
-    public ResponseEntity<LessonResponse> getLesson(
+    public ResponseEntity<LessonResponse> getLessonDetail(
             @PathVariable Long classroomId,
             @PathVariable Long lessonId,
             @RequestParam Long userId) {
 
-        log.info("GET /api/classrooms/{}/lessons/{} - Fetching lesson for user: {}",
-                classroomId, lessonId, userId);
+        log.info("GET /api/classrooms/{}/lessons/{} - Fetching lesson for user: {}", classroomId, lessonId, userId);
 
         try {
             LessonResponse response = lessonService.getLessonDetail(classroomId, lessonId, userId);
@@ -147,48 +146,6 @@ public class LessonController {
         }
     }
 
-    /**
-     * 수업 완료 상태 토글 (교육자만 가능)
-     */
-    @PatchMapping("/{lessonId}/completion")
-    public ResponseEntity<LessonResponse> toggleLessonCompletion(
-            @PathVariable Long classroomId,
-            @PathVariable Long lessonId) {
-
-        log.info("PATCH /api/classrooms/{}/lessons/{}/completion - Toggling completion", classroomId, lessonId);
-
-        try {
-            LessonResponse response = lessonService.toggleLessonCompletion(classroomId, lessonId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to toggle lesson completion: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Error toggling lesson completion: ", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    /**
-     * 수업 검색
-     */
-    @GetMapping("/search")
-    public ResponseEntity<List<LessonResponse>> searchLessons(
-            @PathVariable Long classroomId,
-            @RequestParam String keyword,
-            @RequestParam Long userId) {
-
-        log.info("GET /api/classrooms/{}/lessons/search - Searching with keyword: {}", classroomId, keyword);
-
-        try {
-            List<LessonResponse> responses = lessonService.searchLessons(classroomId, keyword, userId);
-            return ResponseEntity.ok(responses);
-        } catch (Exception e) {
-            log.error("Failed to search lessons: ", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
     // ============================================================================
     // 커리큘럼 관리
     // ============================================================================
@@ -220,7 +177,7 @@ public class LessonController {
      * 클래스룸 커리큘럼 목록 조회
      */
     @GetMapping("/curriculums")
-    public ResponseEntity<List<CurriculumResponse>> getCurriculums(
+    public ResponseEntity<List<CurriculumResponse>> getCurriculumsByClassroom(
             @PathVariable Long classroomId) {
 
         log.info("GET /api/classrooms/{}/lessons/curriculums - Fetching curriculums", classroomId);
@@ -287,135 +244,6 @@ public class LessonController {
                     "success", false,
                     "message", "커리큘럼 삭제 중 오류가 발생했습니다."
             ));
-        }
-    }
-
-    // ============================================================================
-    // 학습 진도 관리
-    // ============================================================================
-
-    /**
-     * 학습 진도 업데이트
-     */
-    @PostMapping("/{lessonId}/progress")
-    public ResponseEntity<LearningProgressResponse> updateLearningProgress(
-            @PathVariable Long classroomId,
-            @PathVariable Long lessonId,
-            @RequestParam Long userId,
-            @Valid @RequestBody LearningProgressUpdateRequest request) {
-
-        log.info("POST /api/classrooms/{}/lessons/{}/progress - Updating progress for user: {}",
-                classroomId, lessonId, userId);
-
-        try {
-            LearningProgressResponse response = lessonService.updateLearningProgress(
-                    classroomId, lessonId, userId, request);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Progress update failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Progress update error: ", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    /**
-     * 사용자의 학습 진도 조회
-     */
-    @GetMapping("/{lessonId}/progress")
-    public ResponseEntity<LearningProgressResponse> getLearningProgress(
-            @PathVariable Long classroomId,
-            @PathVariable Long lessonId,
-            @RequestParam Long userId) {
-
-        log.info("GET /api/classrooms/{}/lessons/{}/progress - Fetching progress for user: {}",
-                classroomId, lessonId, userId);
-
-        try {
-            LearningProgressResponse response = lessonService.getLearningProgress(classroomId, lessonId, userId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Progress fetch failed: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("Progress fetch error: ", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    /**
-     * 수업별 전체 학습 진도 통계 조회 (교육자용)
-     */
-    @GetMapping("/{lessonId}/progress/stats")
-    public ResponseEntity<LessonResponse.LessonProgressInfo> getLessonProgressStatistics(
-            @PathVariable Long classroomId,
-            @PathVariable Long lessonId) {
-
-        log.info("GET /api/classrooms/{}/lessons/{}/progress/stats - Fetching progress statistics",
-                classroomId, lessonId);
-
-        try {
-            LessonResponse.LessonProgressInfo response = lessonService.getLessonProgressStatistics(classroomId, lessonId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            log.warn("Progress stats fetch failed: {}", e.getMessage());
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("Progress stats fetch error: ", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    // ============================================================================
-    // 통계 및 리포트
-    // ============================================================================
-
-    /**
-     * 클래스룸 수업 통계 조회 (교육자용)
-     */
-    @GetMapping("/statistics")
-    public ResponseEntity<LessonStatisticsResponse> getClassroomLessonStatistics(
-            @PathVariable Long classroomId) {
-
-        log.info("GET /api/classrooms/{}/lessons/statistics - Fetching lesson statistics", classroomId);
-
-        try {
-            LessonStatisticsResponse response = lessonService.getClassroomLessonStatistics(classroomId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Failed to fetch lesson statistics: ", e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    /**
-     * 클래스룸의 전체 학습 진도 개요 조회 (교육자용)
-     */
-    @GetMapping("/progress/overview")
-    public ResponseEntity<Map<String, Object>> getClassroomProgressOverview(
-            @PathVariable Long classroomId) {
-
-        log.info("GET /api/classrooms/{}/lessons/progress/overview - Fetching progress overview", classroomId);
-
-        try {
-            LessonStatisticsResponse stats = lessonService.getClassroomLessonStatistics(classroomId);
-
-            return ResponseEntity.ok(Map.of(
-                    "totalLessons", stats.getTotalLessons(),
-                    "completedLessons", stats.getCompletedLessons(),
-                    "totalStudents", stats.getTotalStudents(),
-                    "activeStudents", stats.getActiveStudents(),
-                    "overallProgress", stats.getOverallProgress(),
-                    "completedStudentsCount", stats.getCompletedStudentsCount(),
-                    "inProgressStudentsCount", stats.getInProgressStudentsCount(),
-                    "notStartedStudentsCount", stats.getNotStartedStudentsCount(),
-                    "popularLessons", stats.getPopularLessons(),
-                    "lowProgressLessons", stats.getLowProgressLessons()
-            ));
-        } catch (Exception e) {
-            log.error("Failed to fetch progress overview: ", e);
-            return ResponseEntity.internalServerError().build();
         }
     }
 }

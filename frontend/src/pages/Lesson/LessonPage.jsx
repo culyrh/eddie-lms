@@ -1,653 +1,636 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Play, 
-  FileText, 
-  Calendar, 
-  Clock, 
-  Users, 
-  BookOpen,
-  Video,
-  File,
-  Download,
-  Edit,
-  Trash2
-} from 'lucide-react';
-import lessonService from '../../services/lessonService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { BookOpen, Clock, Users, Plus, FileText, Video, Edit, Eye, Download, Upload, X } from 'lucide-react';
 import LessonForm from './LessonForm';
+import lessonService from '../../services/lessonService';
+import { multipartUploadService } from '../../services/multipartUploadService.js';
 
-const LessonPage = ({ classroom, currentUser }) => {
+const LessonPage = ({ classroomId, currentUser, accessToken }) => {
   const [lessons, setLessons] = useState([]);
-  const [curriculums, setCurriculums] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedLesson, setSelectedLesson] = useState(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [activeView, setActiveView] = useState('list'); // 'list', 'curriculum', 'detail'
+  const [learningMaterials, setLearningMaterials] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingLesson, setEditingLesson] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [materialsLoading, setMaterialsLoading] = useState(false); // 추가된 상태
+  const [error, setError] = useState('');
+  
+  // 업로드 관련 상태 (최소한만)
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const isEducator = currentUser?.userType === 'EDUCATOR';
+  // useCallback으로 감싸서 dependency 경고 해결
+  const loadLessons = useCallback(async () => {
+    if (!classroomId || !currentUser?.userId) return;
+
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const lessonList = await lessonService.getLessons(
+        classroomId, 
+        currentUser.userId,
+        accessToken
+      );
+      setLessons(lessonList);
+    } catch (error) {
+      console.error('수업 목록 로드 실패:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [classroomId, currentUser?.userId, accessToken]);
 
   useEffect(() => {
     loadLessons();
-    loadCurriculums();
-  }, [classroom]);
+  }, [loadLessons]); // loadLessons dependency 추가
 
-  // ============================================================================
-  // 데이터 로딩
-  // ============================================================================
-  
-  const loadLessons = async () => {
+  // 학습자료 목록 로드
+  const loadLearningMaterials = async (lessonId) => {
     try {
-      setLoading(true);
-      
-      // 실제 API 호출로 변경 (Mock 데이터는 API가 준비될 때까지 유지)
-      // const lessons = await lessonService.getLessonsByClassroom(classroom.classroomId, currentUser?.token);
-      // setLessons(lessons);
-      
-      // 임시 Mock 데이터 (API 준비될 때까지)
-      const mockLessons = [
+      setMaterialsLoading(true);
+    
+      const response = await fetch(
+        `http://localhost:8080/api/classrooms/${classroomId}/lessons/${lessonId}/materials`,
         {
-          lessonId: 1,
-          curriculumId: 1,
-          title: "React 기초 - JSX와 컴포넌트",
-          description: "React의 기본 개념과 JSX 문법을 학습합니다.",
-          lessonType: "VIDEO",
-          scheduledAt: "2024-08-28T10:00:00",
-          durationMinutes: 90,
-          isCompleted: false,
-          materials: [
-            { materialId: 1, title: "React 기초 자료.pdf", fileType: "PDF", fileSize: 2048576 },
-            { materialId: 2, title: "실습 예제 코드.zip", fileType: "ZIP", fileSize: 1024000 }
-          ],
-          progressInfo: {
-            totalStudents: 25,
-            completedStudents: 15,
-            averageProgress: 75.5
-          }
-        },
-        {
-          lessonId: 2,
-          curriculumId: 1,
-          title: "State와 Props 심화",
-          description: "React의 상태 관리와 Props 전달 방법을 자세히 다룹니다.",
-          lessonType: "LIVE",
-          scheduledAt: "2024-08-30T14:00:00",
-          durationMinutes: 120,
-          isCompleted: false,
-          materials: [
-            { materialId: 3, title: "State 관리 가이드.pdf", fileType: "PDF", fileSize: 3072000 }
-          ],
-          progressInfo: {
-            totalStudents: 25,
-            completedStudents: 8,
-            averageProgress: 45.0
-          }
-        },
-        {
-          lessonId: 3,
-          curriculumId: 2,
-          title: "Hook 활용하기",
-          description: "useState, useEffect 등 React Hook 활용법",
-          lessonType: "PDF",
-          scheduledAt: "2024-09-02T16:00:00",
-          durationMinutes: 60,
-          isCompleted: true,
-          materials: [
-            { materialId: 4, title: "Hook 완전 정복.pdf", fileType: "PDF", fileSize: 5120000 },
-            { materialId: 5, title: "Hook 실습.pptx", fileType: "PPTX", fileSize: 7168000 }
-          ],
-          progressInfo: {
-            totalStudents: 25,
-            completedStudents: 22,
-            averageProgress: 92.3
+          method: 'GET',
+          headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
           }
         }
-      ];
+      );
       
-      setLessons(mockLessons);
-    } catch (error) {
-      console.error('수업 목록 로드 실패:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCurriculums = async () => {
-    try {
-      // 실제 API 호출로 변경 (Mock 데이터는 API가 준비될 때까지 유지)
-      // const curriculums = await lessonService.getCurriculumsByClassroom(classroom.classroomId, currentUser?.token);
-      // setCurriculums(curriculums);
-      
-      // 커리큘럼 목록 로드 (임시 Mock 데이터)
-      const mockCurriculums = [
-        {
-          curriculumId: 1,
-          title: "React 기초 과정",
-          description: "React 개발의 기초를 다지는 과정",
-          orderIndex: 1,
-          lessons: [1, 2] // lesson ID 배열
-        },
-        {
-          curriculumId: 2,
-          title: "React 고급 활용",
-          description: "실전 React 개발 기법",
-          orderIndex: 2,
-          lessons: [3]
-        }
-      ];
-      
-      setCurriculums(mockCurriculums);
-    } catch (error) {
-      console.error('커리큘럼 로드 실패:', error);
-    }
-  };
-
-  // ============================================================================
-  // 이벤트 핸들러
-  // ============================================================================
-
-  const handleCreateLesson = () => {
-    setShowCreateForm(true);
-    setSelectedLesson(null);
-  };
-
-  const handleEditLesson = (lesson) => {
-    setSelectedLesson(lesson);
-    setShowCreateForm(true);
-  };
-
-  const handleDeleteLesson = async (lessonId) => {
-    if (window.confirm('정말로 이 수업을 삭제하시겠습니까?')) {
-      try {
-        // 실제 API 호출
-        await lessonService.deleteLesson(lessonId, currentUser?.token);
-        console.log('수업 삭제 성공:', lessonId);
-        loadLessons(); // 새로고침
-      } catch (error) {
-        console.error('수업 삭제 실패:', error);
-        alert('수업 삭제에 실패했습니다.');
+      if (!response.ok) {
+        throw new Error('학습자료를 불러오는데 실패했습니다.');
       }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setLearningMaterials(result.data || []);
+        console.log(`학습자료 ${result.count || 0}개 로드됨`);
+      } else {
+        throw new Error(result.error || '학습자료 로드 실패');
+      }
+
+    } catch (error) {
+      console.error('학습자료 로드 실패:', error);
+      setError(error.message);
+      setLearningMaterials([]);
+    } finally {
+      setMaterialsLoading(false);
     }
   };
 
-  const handleLessonClick = (lesson) => {
-    setSelectedLesson(lesson);
-    setActiveView('detail');
-  };
-
-  const handleDownloadMaterial = (material) => {
-    // 파일 다운로드 로직 (나중에 S3 Presigned URL로 구현 예정)
-    console.log('다운로드:', material);
-  };
-
-  // ============================================================================
-  // 렌더링 헬퍼 함수
-  // ============================================================================
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const getLessonTypeIcon = (type) => {
-    switch (type) {
-      case 'VIDEO': return <Video className="h-4 w-4" />;
-      case 'DOCUMENT': return <FileText className="h-4 w-4" />;
-      default: return <BookOpen className="h-4 w-4" />;
+  // 수업 선택 핸들러
+  const handleLessonClick = async (lesson) => {
+    try {
+      const lessonDetail = await lessonService.getLessonDetail(
+        classroomId,
+        lesson.lessonId,
+        accessToken,
+        currentUser.userId
+      );
+    
+      setSelectedLesson(lessonDetail);
+      await loadLearningMaterials(lesson.lessonId);
+    
+    } catch (error) {
+      console.error('수업 상세 조회 실패:', error);
+      alert(`수업 정보를 불러올 수 없습니다: ${error.message}`);
     }
   };
 
-  const getLessonTypeName = (type) => {
-    switch (type) {
-      case 'VIDEO': return '영상 수업';
-      case 'DOCUMENT': return '자료 수업';
-      default: return '기타';
+  // 파일 업로드 핸들러 (핵심만)
+  const handleFileUpload = async () => {
+    if (!uploadFile || !uploadTitle.trim()) {
+      alert('파일과 제목을 모두 입력해주세요.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // 1. S3에 파일 업로드
+      console.log('S3 업로드 시작...');
+      const uploadResult = await multipartUploadService.uploadFile(
+        uploadFile,
+        (progress) => setUploadProgress(progress),
+        accessToken
+      );
+
+      console.log('S3 업로드 완료:', uploadResult);
+
+      // 2. 백엔드에 메타데이터 저장
+      const saveResponse = await fetch(
+        `http://localhost:8080/api/classrooms/${classroomId}/lessons/${selectedLesson.lessonId}/materials`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            title: uploadTitle,
+            fileName: uploadFile.name,
+            fileUrl: uploadResult.fileUrl,
+            fileSize: uploadFile.size,
+            fileType: uploadFile.type
+          })
+        }
+      );
+
+      if (!saveResponse.ok) {
+        throw new Error('메타데이터 저장 실패');
+      }
+
+      console.log('업로드 완료!');
+      
+      // 상태 초기화 및 새로고침
+      setShowUploadModal(false);
+      setUploadFile(null);
+      setUploadTitle('');
+      setUploadProgress(0);
+      
+      // 학습자료 목록 새로고침
+      await loadLearningMaterials(selectedLesson.lessonId);
+      
+      alert('파일이 성공적으로 업로드되었습니다!');
+
+    } catch (error) {
+      console.error('업로드 실패:', error);
+      alert(`업로드에 실패했습니다: ${error.message}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const getFileTypeIcon = (fileType) => {
-    switch (fileType?.toLowerCase()) {
-      case 'pdf': return <FileText className="h-4 w-4 text-red-500" />;
-      case 'zip': 
-      case 'rar': return <File className="h-4 w-4 text-yellow-500" />;
-      case 'pptx':
-      case 'ppt': return <File className="h-4 w-4 text-orange-500" />;
-      default: return <File className="h-4 w-4 text-gray-500" />;
+  // 기존 핸들러들 (변경 없음)
+  const handleEditLesson = () => {
+    if (!selectedLesson) return;
+    setEditingLesson(selectedLesson);
+    setShowForm(true);
+  };
+
+  const handleAddLesson = () => {
+    setEditingLesson(null);
+    setShowForm(true);
+  };
+
+  const handleLessonSubmit = async (lessonData) => {
+    await loadLessons();
+    setShowForm(false);
+    setEditingLesson(null);
+  };
+
+  // 기존 자료 보기/다운로드 핸들러들
+  const handleViewMaterial = async (material) => {
+    try {
+      console.log('자료 보기:', material.fileName);
+    
+      // 백엔드에서 Pre-signed URL 받기
+      const response = await fetch(
+        `http://localhost:8080/api/classrooms/${classroomId}/lessons/${selectedLesson.lessonId}/materials/${material.materialId}/view`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('파일 보기 링크를 가져오는데 실패했습니다.');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.viewUrl) {
+        // 새 탭에서 파일 열기
+        window.open(result.viewUrl, '_blank');
+      } else {
+        throw new Error(result.error || '파일 보기에 실패했습니다.');
+      }
+
+    } catch (error) {
+      console.error('파일 보기 실패:', error);
+      alert(`파일을 열 수 없습니다: ${error.message}`);
     }
   };
 
-  // ============================================================================
-  // 수업 목록 렌더링
-  // ============================================================================
+  const handleDownloadMaterial = async (material) => {
+    try {
+      console.log('자료 다운로드:', material.fileName);
+    
+      // 백엔드에서 Pre-signed URL 받기
+      const response = await fetch(
+        `http://localhost:8080/api/classrooms/${classroomId}/lessons/${selectedLesson.lessonId}/materials/${material.materialId}/download`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('다운로드 링크를 가져오는데 실패했습니다.');
+      }
 
-  const renderLessonList = () => {
-    return (
-      <div>
-        {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">수업</h2>
-            <p className="text-gray-600 mt-1">클래스룸의 모든 수업을 관리하고 학습하세요.</p>
-          </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={() => setActiveView('curriculum')}
-              className="px-4 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <BookOpen className="h-4 w-4 inline mr-2" />
-              커리큘럼 보기
-            </button>
-            {isEducator && (
-              <button
-                onClick={handleCreateLesson}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="h-4 w-4 inline mr-2" />
-                수업 생성
-              </button>
-            )}
-          </div>
-        </div>
+      const result = await response.json();
+    
+      if (result.success && result.downloadUrl) {
+        // 다운로드 링크로 이동
+        const link = document.createElement('a');
+        link.href = result.downloadUrl;
+        link.download = result.fileName || material.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error(result.error || '다운로드에 실패했습니다.');
+      }
 
-        {/* 수업 목록 */}
-        <div className="space-y-4">
-          {lessons.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">아직 수업이 없습니다</h3>
-              <p className="text-gray-600 mb-6">
-                {isEducator 
-                  ? '첫 번째 수업을 생성해보세요.' 
-                  : '교육자가 수업을 추가할 때까지 기다려주세요.'}
-              </p>
-              {isEducator && (
-                <button
-                  onClick={handleCreateLesson}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="h-4 w-4 inline mr-2" />
-                  첫 수업 만들기
-                </button>
-              )}
-            </div>
-          ) : (
-            lessons.map((lesson) => (
-              <div
-                key={lesson.lessonId}
-                className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => handleLessonClick(lesson)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="flex items-center space-x-2">
-                        {getLessonTypeIcon(lesson.lessonType)}
-                        <span className="text-sm font-medium text-blue-600">
-                          {getLessonTypeName(lesson.lessonType)}
-                        </span>
-                      </div>
-                      {lesson.isCompleted && (
-                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                          완료됨
-                        </span>
-                      )}
-                    </div>
-                    
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {lesson.title}
-                    </h3>
-                    <p className="text-gray-600 mb-4">
-                      {lesson.description}
-                    </p>
-                    
-                    <div className="flex items-center space-x-6 text-sm text-gray-500">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatDate(lesson.scheduledAt)}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Clock className="h-4 w-4" />
-                        <span>{lesson.durationMinutes}분</span>
-                      </div>
-                      {isEducator && (
-                        <div className="flex items-center space-x-1">
-                          <Users className="h-4 w-4" />
-                          <span>
-                            {lesson.progressInfo.completedStudents}/{lesson.progressInfo.totalStudents} 완료
-                            ({lesson.progressInfo.averageProgress.toFixed(1)}%)
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 학습 자료 */}
-                    {lesson.materials && lesson.materials.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-100">
-                        <h4 className="text-sm font-medium text-gray-900 mb-2">학습 자료</h4>
-                        <div className="flex flex-wrap gap-2">
-                          {lesson.materials.map((material) => (
-                            <div
-                              key={material.materialId}
-                              className="flex items-center space-x-2 px-3 py-1 bg-gray-50 rounded-md text-sm"
-                            >
-                              {getFileTypeIcon(material.fileType)}
-                              <span className="text-gray-700">{material.title}</span>
-                              <span className="text-gray-500">({formatFileSize(material.fileSize)})</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 액션 버튼 (교육자용) */}
-                  {isEducator && (
-                    <div className="flex items-center space-x-2 ml-4">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditLesson(lesson);
-                        }}
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteLesson(lesson.lessonId);
-                        }}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    );
+    } catch (error) {
+      console.error('다운로드 실패:', error);
+      alert(`다운로드에 실패했습니다: ${error.message}`);
+    }
   };
 
-  // ============================================================================
-  // 커리큘럼 뷰 렌더링
-  // ============================================================================
-
-  const renderCurriculumView = () => {
-    return (
-      <div>
-        {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <button
-              onClick={() => setActiveView('list')}
-              className="text-blue-600 hover:text-blue-800 text-sm mb-2"
-            >
-              ← 수업 목록으로 돌아가기
-            </button>
-            <h2 className="text-2xl font-bold text-gray-900">커리큘럼</h2>
-            <p className="text-gray-600 mt-1">체계적으로 구성된 학습 과정을 확인하세요.</p>
-          </div>
-        </div>
-
-        {/* 커리큘럼 목록 */}
-        <div className="space-y-6">
-          {curriculums.map((curriculum, index) => {
-            const curriculumLessons = lessons.filter(lesson => 
-              curriculum.lessons.includes(lesson.lessonId)
-            );
-            
-            return (
-              <div key={curriculum.curriculumId} className="bg-white border border-gray-200 rounded-lg">
-                <div className="p-6 border-b border-gray-100">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <span className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
-                      {index + 1}
-                    </span>
-                    <h3 className="text-lg font-semibold text-gray-900">{curriculum.title}</h3>
-                  </div>
-                  <p className="text-gray-600 ml-11">{curriculum.description}</p>
-                </div>
-                
-                <div className="p-6">
-                  <div className="space-y-3">
-                    {curriculumLessons.map((lesson, lessonIndex) => (
-                      <div
-                        key={lesson.lessonId}
-                        className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                        onClick={() => handleLessonClick(lesson)}
-                      >
-                        <span className="w-6 h-6 bg-white border-2 border-gray-300 rounded-full flex items-center justify-center text-xs font-medium">
-                          {lessonIndex + 1}
-                        </span>
-                        <div className="flex items-center space-x-2">
-                          {getLessonTypeIcon(lesson.lessonType)}
-                          <span className="text-sm text-blue-600">
-                            {getLessonTypeName(lesson.lessonType)}
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{lesson.title}</h4>
-                          <p className="text-sm text-gray-600">{lesson.durationMinutes}분</p>
-                        </div>
-                        {lesson.isCompleted && (
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                            완료
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  // ============================================================================
-  // 수업 상세 뷰 렌더링
-  // ============================================================================
-
-  const renderLessonDetail = () => {
+  // 학습자료 렌더링
+  const renderLearningMaterials = () => {
     if (!selectedLesson) return null;
 
     return (
-      <div>
-        {/* 헤더 */}
-        <div className="mb-6">
-          <button
-            onClick={() => {
-              setActiveView('list');
-              setSelectedLesson(null);
-            }}
-            className="text-blue-600 hover:text-blue-800 text-sm mb-4"
-          >
-            ← 수업 목록으로 돌아가기
-          </button>
-          
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-3">
-                  {getLessonTypeIcon(selectedLesson.lessonType)}
-                  <span className="text-sm font-medium text-blue-600">
-                    {getLessonTypeName(selectedLesson.lessonType)}
-                  </span>
-                  {selectedLesson.isCompleted && (
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                      완료됨
-                    </span>
-                  )}
-                </div>
-                
-                <h1 className="text-2xl font-bold text-gray-900 mb-3">
-                  {selectedLesson.title}
-                </h1>
-                <p className="text-gray-600 mb-4">
-                  {selectedLesson.description}
-                </p>
-                
-                <div className="flex items-center space-x-6 text-sm text-gray-500">
-                  <div className="flex items-center space-x-1">
-                    <Calendar className="h-4 w-4" />
-                    <span>{formatDate(selectedLesson.scheduledAt)}</span>
+      <div className="mt-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">학습자료</h3>
+          {currentUser?.userType === 'EDUCATOR' && (
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="flex items-center space-x-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+            >
+              <Upload className="h-4 w-4" />
+              <span>자료 업로드</span>
+            </button>
+          )}
+        </div>
+      
+        {materialsLoading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <p className="text-gray-500">학습자료를 불러오는 중...</p>
+          </div>
+        ) : learningMaterials && learningMaterials.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {learningMaterials.map((material) => (
+              <div key={material.materialId} className="bg-gray-50 rounded-lg p-4 border">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900 mb-1">{material.title}</h4>
+                    <p className="text-sm text-gray-500 mb-2">{material.fileName}</p>
+                    <p className="text-xs text-gray-400">
+                      {material.formattedFileSize || (material.fileSize ? `${(material.fileSize / 1024 / 1024).toFixed(1)}MB` : '크기 미상')} • 
+                      {material.uploadedAt ? new Date(material.uploadedAt).toLocaleDateString() : '날짜 미상'}
+                    </p>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{selectedLesson.durationMinutes}분</span>
-                  </div>
-                </div>
-              </div>
-              
-              {isEducator && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleEditLesson(selectedLesson)}
-                    className="px-4 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    <Edit className="h-4 w-4 inline mr-2" />
-                    수정
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 학습 진도 (교육자용) */}
-            {isEducator && selectedLesson.progressInfo && (
-              <div className="mt-6 pt-6 border-t border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">학습 현황</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {selectedLesson.progressInfo.completedStudents}
-                    </div>
-                    <div className="text-sm text-blue-800">완료한 학생</div>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-gray-600">
-                      {selectedLesson.progressInfo.totalStudents}
-                    </div>
-                    <div className="text-sm text-gray-800">총 학생 수</div>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {selectedLesson.progressInfo.averageProgress.toFixed(1)}%
-                    </div>
-                    <div className="text-sm text-green-800">평균 진도율</div>
+                  <div className="flex space-x-2 ml-2">
+                    <button
+                      onClick={() => handleViewMaterial(material)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      title="보기"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDownloadMaterial(material)}
+                      className="p-2 text-green-600 hover:bg-green-50 rounded"
+                      title="다운로드"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p>학습자료가 없습니다.</p>
+            {currentUser?.userType === 'EDUCATOR' && (
+              <p className="text-sm mt-2">
+                '자료 업로드' 버튼을 클릭하여 학습자료를 업로드하세요.
+              </p>
             )}
           </div>
-        </div>
-
-        {/* 학습 자료 */}
-        {selectedLesson.materials && selectedLesson.materials.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">학습 자료</h3>
-            <div className="space-y-3">
-              {selectedLesson.materials.map((material) => (
-                <div
-                  key={material.materialId}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center space-x-3">
-                    {getFileTypeIcon(material.fileType)}
-                    <div>
-                      <h4 className="font-medium text-gray-900">{material.title}</h4>
-                      <p className="text-sm text-gray-600">
-                        {material.fileType} • {formatFileSize(material.fileSize)}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDownloadMaterial(material)}
-                    className="px-4 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                  >
-                    <Download className="h-4 w-4 inline mr-2" />
-                    다운로드
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
-
-        {/* 수업 내용 영역 (파일 처리 영역 - 나중에 구현 예정) */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">수업 내용</h3>
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <div className="text-gray-400 mb-4">
-              {selectedLesson.lessonType === 'VIDEO' && <Video className="h-12 w-12 mx-auto" />}
-              {selectedLesson.lessonType === 'DOCUMENT' && <FileText className="h-12 w-12 mx-auto" />}
-            </div>
-            <p className="text-gray-600">
-              {selectedLesson.lessonType === 'VIDEO' && '영상 플레이어 영역 (파일 처리 후 구현 예정)'}
-              {selectedLesson.lessonType === 'DOCUMENT' && '문서 뷰어 영역 (파일 처리 후 구현 예정)'}
-            </p>
-          </div>
-        </div>
       </div>
     );
   };
 
-  // ============================================================================
-  // 메인 렌더링
-  // ============================================================================
+  const renderLessonTypeIcon = (type) => {
+    switch (type) {
+      case 'VIDEO':
+        return <Video className="h-4 w-4 text-blue-500" />;
+      case 'DOCUMENT':
+        return <FileText className="h-4 w-4 text-green-500" />;
+      default:
+        return <BookOpen className="h-4 w-4 text-gray-500" />;
+    }
+  };
 
-  if (loading) {
+  if (showForm) {
+    return (
+      <LessonForm
+        classroomId={classroomId}
+        lesson={editingLesson}
+        currentUser={currentUser}
+        onSubmit={handleLessonSubmit}
+        onCancel={() => {
+          setShowForm(false);
+          setEditingLesson(null);
+        }}
+      />
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-500">수업을 불러오는 중...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+          <p className="text-gray-500">수업 목록을 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">오류가 발생했습니다: {error}</p>
+          <button
+            onClick={loadLessons}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            다시 시도
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      {activeView === 'list' && renderLessonList()}
-      {activeView === 'curriculum' && renderCurriculumView()}
-      {activeView === 'detail' && renderLessonDetail()}
-      
-      {/* 수업 생성/수정 폼은 별도 컴포넌트로 분리 예정 */}
-      {showCreateForm && (
-        <LessonForm
-          lesson={selectedLesson}
-          classroomId={classroom?.classroomId}
-          curriculums={curriculums}
-          onSubmit={(lessonData) => {
-            console.log('수업 저장됨:', lessonData);
-            setShowCreateForm(false);
-            setSelectedLesson(null);
-            loadLessons(); // 목록 새로고침
-          }}
-          onCancel={() => {
-            setShowCreateForm(false);
-            setSelectedLesson(null);
-          }}
-          currentUser={currentUser}
-        />
+    <div className="flex h-full">
+      {/* 왼쪽: 수업 목록 */}
+      <div className="w-1/3 border-r border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">수업 목록</h2>
+          {currentUser?.userType === 'EDUCATOR' && (
+            <button 
+              onClick={handleAddLesson}
+              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {lessons.length === 0 ? (
+          <div className="text-center py-12">
+            <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">등록된 수업이 없습니다.</p>
+            {currentUser?.userType === 'EDUCATOR' && (
+              <button 
+                onClick={handleAddLesson}
+                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                첫 수업 만들기
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {lessons.map((lesson) => (
+              <div
+                key={lesson.lessonId}
+                onClick={() => handleLessonClick(lesson)}
+                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                  selectedLesson?.lessonId === lesson.lessonId
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-2 mb-2">
+                  {renderLessonTypeIcon(lesson.lessonType)}
+                  <h3 className="font-medium text-gray-900 truncate">{lesson.title}</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-2 line-clamp-2">{lesson.description}</p>
+                <div className="flex items-center text-xs text-gray-500 space-x-4">
+                  <span className="flex items-center">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {lesson.durationMinutes || 0}분
+                  </span>
+                  {lesson.completionRate !== undefined && (
+                    <span className="flex items-center">
+                      <Users className="h-3 w-3 mr-1" />
+                      진행률 {Math.round(lesson.completionRate)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 오른쪽: 수업 상세 및 자료 */}
+      <div className="flex-1 p-6">
+        {!selectedLesson ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">수업을 선택해주세요</h3>
+              <p className="text-gray-500">왼쪽 목록에서 수업을 클릭하여 상세 정보를 확인하세요.</p>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* 수업 상세 정보 */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  {renderLessonTypeIcon(selectedLesson.lessonType)}
+                  <h1 className="text-2xl font-bold text-gray-900">{selectedLesson.title}</h1>
+                </div>
+              </div>
+
+              <p className="text-gray-600 mb-6">{selectedLesson.description}</p>
+
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <Clock className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                  <div className="text-sm text-gray-600">수업 시간</div>
+                  <div className="font-semibold">{selectedLesson.durationMinutes || 0}분</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <FileText className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                  <div className="text-sm text-gray-600">학습 자료</div>
+                  <div className="font-semibold">{learningMaterials?.length || 0}개</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <Users className="h-6 w-6 text-purple-500 mx-auto mb-2" />
+                  <div className="text-sm text-gray-600">진행률</div>
+                  <div className="font-semibold">{Math.round(selectedLesson.completionRate || 0)}%</div>
+                </div>
+              </div>
+
+              {/* 학습자료 목록 렌더링 */}
+              {renderLearningMaterials()}
+            </div>
+
+            {/* 교육자용 수업 관리 */}
+            {currentUser?.userType === 'EDUCATOR' && (
+              <div className="mt-6 bg-white border border-gray-200 rounded-lg">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">수업 관리</h2>
+                </div>
+                <div className="p-6">
+                  <div className="flex space-x-3">
+                    <button 
+                      onClick={handleEditLesson}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      <Edit className="h-4 w-4" />
+                      <span>수업 수정</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 업로드 모달 (간단한 버전) */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">학습 자료 업로드</h3>
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  disabled={isUploading}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    자료 제목
+                  </label>
+                  <input
+                    type="text"
+                    value={uploadTitle}
+                    onChange={(e) => setUploadTitle(e.target.value)}
+                    disabled={isUploading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+                    placeholder="예: React 기초 참고자료"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    파일 선택
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    {uploadFile ? (
+                      <div className="text-sm text-gray-600">
+                        <FileText className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                        <p className="font-medium">{uploadFile.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {(uploadFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                        {!isUploading && (
+                          <button
+                            onClick={() => setUploadFile(null)}
+                            className="mt-2 text-red-500 text-xs hover:underline"
+                          >
+                            파일 제거
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500 mb-2">파일을 선택해주세요</p>
+                        <input
+                          type="file"
+                          onChange={(e) => setUploadFile(e.target.files[0])}
+                          disabled={isUploading}
+                          className="hidden"
+                          id="upload-input"
+                        />
+                        <button
+                          onClick={() => document.getElementById('upload-input').click()}
+                          disabled={isUploading}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm transition-colors disabled:bg-gray-400"
+                        >
+                          파일 선택
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* 업로드 진행률 */}
+                {isUploading && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>업로드 중...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowUploadModal(false)}
+                  disabled={isUploading}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:bg-gray-100"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleFileUpload}
+                  disabled={isUploading || !uploadFile || !uploadTitle.trim()}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400"
+                >
+                  {isUploading ? '업로드 중...' : '업로드'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

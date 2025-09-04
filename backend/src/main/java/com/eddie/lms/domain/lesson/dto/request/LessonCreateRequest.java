@@ -4,9 +4,6 @@ import com.eddie.lms.domain.lesson.entity.Lesson;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,6 +22,4 @@ public class LessonCreateRequest {
     private Lesson.LessonType lessonType;
 
     private Long curriculumId;
-
-    private List<LearningMaterialCreateRequest> materials;
 }

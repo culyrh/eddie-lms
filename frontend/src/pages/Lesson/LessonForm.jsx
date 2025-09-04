@@ -16,17 +16,11 @@ const LessonForm = ({
     lessonType: 'VIDEO',
     curriculumId: '',
     scheduledAt: '',
-    durationMinutes: 60,
-    materials: []
+    durationMinutes: 60
   });
   
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [showMaterialForm, setShowMaterialForm] = useState(false);
-  const [newMaterial, setNewMaterial] = useState({
-    title: '',
-    fileType: 'PDF'
-  });
 
   const isEditing = lesson !== null;
 
@@ -39,8 +33,7 @@ const LessonForm = ({
         curriculumId: lesson.curriculumId || '',
         scheduledAt: lesson.scheduledAt ? 
           new Date(lesson.scheduledAt).toISOString().slice(0, 16) : '',
-        durationMinutes: lesson.durationMinutes || 60,
-        materials: lesson.materials || []
+        durationMinutes: lesson.durationMinutes || 60
       });
     }
   }, [lesson]);
@@ -74,11 +67,12 @@ const LessonForm = ({
     
     const errorObj = {};
     validationErrors.forEach(error => {
-      if (error.includes('제목')) errorObj.title = error;
-      else if (error.includes('설명')) errorObj.description = error;
-      else if (error.includes('유형')) errorObj.lessonType = error;
-      else if (error.includes('일정')) errorObj.scheduledAt = error;
-      else if (error.includes('시간')) errorObj.durationMinutes = error;
+      // 한글 키워드로 에러 매칭
+      if (error.includes('제목') || error.includes('ì œëª©')) errorObj.title = error;
+      else if (error.includes('설명') || error.includes('ì„¤ëª…')) errorObj.description = error;
+      else if (error.includes('유형') || error.includes('ìœ í˜•')) errorObj.lessonType = error;
+      else if (error.includes('일정') || error.includes('ì¼ì •')) errorObj.scheduledAt = error;
+      else if (error.includes('시간') || error.includes('ì‹œê°„')) errorObj.durationMinutes = error;
     });
 
     // 추가 검증
@@ -96,23 +90,35 @@ const LessonForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+  
     if (!validateForm()) return;
-    
+  
     setLoading(true);
     try {
+      // scheduledAt 처리 개선
+      let scheduledAtISO = null;
+      if (formData.scheduledAt && formData.scheduledAt.trim()) {
+        const scheduledDate = new Date(formData.scheduledAt);
+        if (isNaN(scheduledDate.getTime())) {
+          throw new Error('수업 일정이 올바르지 않습니다.');
+        }
+        scheduledAtISO = scheduledDate.toISOString();
+      } 
+
       const submitData = {
         ...formData,
         classroomId,
-        scheduledAt: new Date(formData.scheduledAt).toISOString()
+        scheduledAt: scheduledAtISO // null이면 서버에서 처리하도록
       };
 
+      console.log('제출 데이터:', submitData); // 디버깅용
+
       if (isEditing) {
-        await lessonService.updateLesson(lesson.lessonId, submitData, currentUser?.token);
+        await lessonService.updateLesson(classroomId, lesson.lessonId, submitData, currentUser?.token);
       } else {
-        await lessonService.createLesson(submitData, currentUser?.token);
+        await lessonService.createLesson(classroomId, submitData, currentUser?.token);
       }
-      
+    
       onSubmit?.(submitData);
     } catch (error) {
       console.error('수업 저장 실패:', error);
@@ -121,42 +127,7 @@ const LessonForm = ({
       setLoading(false);
     }
   };
-
-  // ============================================================================
-  // 학습 자료 관리
-  // ============================================================================
-
-  const handleAddMaterial = () => {
-    if (!newMaterial.title.trim()) {
-      alert('자료 제목을 입력해주세요.');
-      return;
-    }
-
-    const material = {
-      materialId: Date.now(), // 임시 ID
-      title: newMaterial.title,
-      fileType: newMaterial.fileType,
-      fileName: `${newMaterial.title}.${newMaterial.fileType.toLowerCase()}`,
-      fileSize: 0, // 파일 업로드 구현 시 실제 크기로 변경
-      filePath: '', // 파일 업로드 구현 시 실제 경로로 변경
-    };
-
-    setFormData(prev => ({
-      ...prev,
-      materials: [...prev.materials, material]
-    }));
-
-    setNewMaterial({ title: '', fileType: 'PDF' });
-    setShowMaterialForm(false);
-  };
-
-  const handleRemoveMaterial = (materialId) => {
-    setFormData(prev => ({
-      ...prev,
-      materials: prev.materials.filter(m => m.materialId !== materialId)
-    }));
-  };
-
+  
   // ============================================================================
   // 렌더링 헬퍼
   // ============================================================================
@@ -174,15 +145,6 @@ const LessonForm = ({
       case 'VIDEO': return '영상 수업';
       case 'DOCUMENT': return '자료 수업';
       default: return '기타';
-    }
-  };
-
-  const getFileTypeIcon = (fileType) => {
-    switch (fileType?.toLowerCase()) {
-      case 'pdf': return <FileText className="h-4 w-4 text-red-500" />;
-      case 'pptx':
-      case 'ppt': return <FileText className="h-4 w-4 text-orange-500" />;
-      default: return <FileText className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -349,109 +311,6 @@ const LessonForm = ({
               </div>
             </div>
 
-            {/* 학습 자료 */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  학습 자료
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowMaterialForm(true)}
-                  className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-                >
-                  자료 추가
-                </button>
-              </div>
-
-              {/* 기존 학습 자료 목록 */}
-              {formData.materials.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  {formData.materials.map((material) => (
-                    <div
-                      key={material.materialId}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex items-center space-x-3">
-                        {getFileTypeIcon(material.fileType)}
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900">
-                            {material.title}
-                          </h4>
-                          <p className="text-xs text-gray-500">
-                            {material.fileType} 파일
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMaterial(material.materialId)}
-                        className="p-1 text-gray-400 hover:text-red-600 rounded"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 새 자료 추가 폼 */}
-              {showMaterialForm && (
-                <div className="p-4 bg-blue-50 rounded-lg space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      자료 제목
-                    </label>
-                    <input
-                      type="text"
-                      value={newMaterial.title}
-                      onChange={(e) => setNewMaterial(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="예: React 기초 참고자료"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      파일 유형
-                    </label>
-                    <select
-                      value={newMaterial.fileType}
-                      onChange={(e) => setNewMaterial(prev => ({ ...prev, fileType: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="PDF">PDF</option>
-                      <option value="PPTX">PowerPoint</option>
-                      <option value="DOCX">Word 문서</option>
-                      <option value="ZIP">압축 파일</option>
-                    </select>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={handleAddMaterial}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      추가
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMaterialForm(false);
-                        setNewMaterial({ title: '', fileType: 'PDF' });
-                      }}
-                      className="px-4 py-2 text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="text-xs text-gray-500">
-                * 실제 파일 업로드는 S3 연동 후 구현 예정입니다. 현재는 메타데이터만 저장됩니다.
-              </div>
-            </div>
-
             {/* 수업 유형별 안내 */}
             <div className="bg-blue-50 p-4 rounded-lg">
               <div className="flex items-start space-x-3">
@@ -463,6 +322,9 @@ const LessonForm = ({
                   <p className="text-sm text-blue-800">
                     {formData.lessonType === 'VIDEO' && '영상 파일을 업로드하면 학생들이 언제든 시청할 수 있습니다. 시청 진도율이 자동으로 추적됩니다.'}
                     {formData.lessonType === 'DOCUMENT' && 'PDF, PPT, Word 등의 문서를 업로드하면 학생들이 브라우저에서 바로 볼 수 있습니다.'}
+                  </p>
+                  <p className="text-sm text-blue-700 mt-2 font-medium">
+                    📝 학습 자료 업로드는 수업 생성 후 수업 페이지에서 가능합니다.
                   </p>
                 </div>
               </div>

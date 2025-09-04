@@ -12,8 +12,19 @@ const ProfilePage = ({ user, onUpdateProfile, onClose }) => {
   const [errors, setErrors] = useState({});
   const fileInputRef = useRef(null);
 
-  const defaultProfileImage = "https://via.placeholder.com/150x150/6366f1/ffffff?text=" + 
-    (user?.name ? user.name.charAt(0).toUpperCase() : 'U');
+  const getDefaultProfileImage = (name) => {
+    const initial = name ? name.charAt(0).toUpperCase() : 'U';
+    const svg = `
+      <svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+        <rect width="150" height="150" fill="#6366f1"/>
+        <text x="75" y="95" font-family="Arial, sans-serif" font-size="60" 
+              font-weight="bold" fill="white" text-anchor="middle">${initial}</text>
+      </svg>
+    `;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  };
+
+const defaultProfileImage = getDefaultProfileImage(user?.name);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

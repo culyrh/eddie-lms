@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 수업 엔티티
+ * 수업 엔티티 (진도 추적 기능 제거됨)
  */
 @Entity
 @Table(name = "lessons")
@@ -42,10 +42,6 @@ public class Lesson {
     @Column(name = "lesson_type", nullable = false, length = 20)
     private LessonType lessonType;
 
-    @Column(name = "is_completed", nullable = false)
-    @Builder.Default
-    private Boolean isCompleted = false;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -59,13 +55,13 @@ public class Lesson {
     @Builder.Default
     private List<LearningMaterial> materials = new ArrayList<>();
 
-    // 학습 진도와의 연관관계 (OneToMany)
-    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<LearningProgress> progressList = new ArrayList<>();
+    // 커리큘럼과의 연관관계 (ManyToOne) - 필요시 추가
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "curriculum_id", insertable = false, updatable = false)
+    private Curriculum curriculum;
 
     /**
-     * 수업 유형 열거형 (실시간 세션 제거)
+     * 수업 유형 열거형
      */
     public enum LessonType {
         VIDEO("영상 수업"),
@@ -99,21 +95,6 @@ public class Lesson {
     }
 
     /**
-     * 학습 진도 추가
-     */
-    public void addProgress(LearningProgress progress) {
-        progressList.add(progress);
-        progress.setLesson(this);
-    }
-
-    /**
-     * 수업 완료 상태 토글
-     */
-    public void toggleCompletion() {
-        this.isCompleted = !this.isCompleted;
-    }
-
-    /**
      * 수업 정보 업데이트
      */
     public void updateInfo(String title, String description, LessonType lessonType) {
@@ -136,19 +117,23 @@ public class Lesson {
     }
 
     /**
-     * 수업이 시작 가능한지 확인 (업로드된 자료는 언제든 접근 가능)
+     * 수업 상태 확인 (단순화됨)
      */
-    public boolean canStart() {
-        return true;
+    public String getStatus() {
+        return "수강 가능";
     }
 
     /**
-     * 수업 상태 확인 (실시간 세션 관련 제거)
+     * 수업 자료 개수 조회
      */
-    public String getStatus() {
-        if (isCompleted) {
-            return "완료됨";
-        }
-        return "수강 가능";
+    public int getMaterialCount() {
+        return materials.size();
+    }
+
+    /**
+     * 수업이 비어있는지 확인
+     */
+    public boolean isEmpty() {
+        return materials.isEmpty();
     }
 }

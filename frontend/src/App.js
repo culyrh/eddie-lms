@@ -596,8 +596,10 @@ const EddieApp = () => {
       case '수업':
         return (
           <LessonPage 
-            classroom={selectedClassroom} 
+            classroomId={selectedClassroom?.classroomId}
+            selectedClassroom={selectedClassroom} 
             currentUser={currentUser}
+            accessToken={accessToken}  // currentUser?.token이 아닌 accessToken 사용
           />
         );
       case '퀴즈':

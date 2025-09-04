@@ -33,8 +33,21 @@ const TopNavBar = ({ user, onLogout, onProfileClick }) => {
     setIsProfileDropdownOpen(false);
   };
 
-  const defaultProfileImage = "https://via.placeholder.com/40x40/6366f1/ffffff?text=" + 
-    (user?.name ? user.name.charAt(0).toUpperCase() : 'U');
+  const getDefaultProfileImage = (name) => {
+    const initial = name ? name.charAt(0).toUpperCase() : 'U';
+    const svg = `
+      <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <rect width="40" height="40" fill="#6366f1"/>
+        <text x="20" y="28" font-family="Arial, sans-serif" font-size="16" 
+              font-weight="bold" fill="white" text-anchor="middle">${initial}</text>
+      </svg>
+    `;
+  
+    // URL 인코딩 사용 (더 안전함)
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  };
+
+const defaultProfileImage = getDefaultProfileImage(user?.name);
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">

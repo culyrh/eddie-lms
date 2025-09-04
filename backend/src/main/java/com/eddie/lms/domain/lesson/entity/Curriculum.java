@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 커리큘럼 엔티티
+ * 커리큘럼 엔티티 (진도 추적 기능 제거됨)
  */
 @Entity
 @Table(name = "curriculums")
@@ -47,7 +47,7 @@ public class Curriculum {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // 수업들과의 연관관계 (OneToMany) - createdAt 순으로 변경
+    // 수업들과의 연관관계 (OneToMany)
     @OneToMany(mappedBy = "curriculumId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("createdAt ASC")
     @Builder.Default
@@ -76,48 +76,60 @@ public class Curriculum {
     }
 
     /**
-     * 완료된 수업 개수 조회
+     * 가장 최근에 생성된 수업 조회
      */
-    public long getCompletedLessonCount() {
-        if (lessons == null) {
-            return 0;
-        }
-        return lessons.stream()
-                .filter(Lesson::getIsCompleted)
-                .count();
-    }
-
-    /**
-     * 진행률 계산 (0-100%)
-     */
-    public double getProgressPercentage() {
-        int totalLessons = getLessonCount();
-        if (totalLessons == 0) {
-            return 0.0;
-        }
-        return (getCompletedLessonCount() * 100.0) / totalLessons;
-    }
-
-    /**
-     * 다음 수업 조회 (실시간 세션 필드 제거)
-     */
-    public Lesson getNextLesson() {
-        if (lessons == null) {
+    public Lesson getLatestLesson() {
+        if (lessons == null || lessons.isEmpty()) {
             return null;
         }
 
-        // 미완료 수업 중 가장 먼저 생성된 것 반환
         return lessons.stream()
-                .filter(lesson -> !lesson.getIsCompleted())
+                .max((l1, l2) -> l1.getCreatedAt().compareTo(l2.getCreatedAt()))
+                .orElse(null);
+    }
+
+    /**
+     * 가장 먼저 생성된 수업 조회
+     */
+    public Lesson getFirstLesson() {
+        if (lessons == null || lessons.isEmpty()) {
+            return null;
+        }
+
+        return lessons.stream()
                 .min((l1, l2) -> l1.getCreatedAt().compareTo(l2.getCreatedAt()))
                 .orElse(null);
     }
 
     /**
-     * 커리큘럼의 총 소요 시간 계산 (분) - 실시간 세션 관련 제거
+     * 커리큘럼이 비어있는지 확인
      */
-    public int getTotalDurationMinutes() {
-        // durationMinutes 필드가 없으므로 0 반환 또는 다른 로직으로 대체
-        return 0;
+    public boolean isEmpty() {
+        return lessons == null || lessons.isEmpty();
+    }
+
+    /**
+     * 특정 수업이 이 커리큘럼에 속하는지 확인
+     */
+    public boolean containsLesson(Long lessonId) {
+        if (lessons == null || lessonId == null) {
+            return false;
+        }
+
+        return lessons.stream()
+                .anyMatch(lesson -> lesson.getLessonId().equals(lessonId));
+    }
+
+    /**
+     * 커리큘럼의 총 학습자료 개수 계산
+     */
+    public int getTotalMaterialCount() {
+        if (lessons == null) {
+            return 0;
+        }
+
+        return lessons.stream()
+                .mapToInt(Lesson::getMaterialCount)
+                .sum();
     }
 }

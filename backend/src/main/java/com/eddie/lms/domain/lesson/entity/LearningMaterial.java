@@ -7,7 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * 학습 자료 엔티티
+ * 학습 자료 엔티티 (file_type 길이 확장됨)
  */
 @Entity
 @Table(name = "learning_materials")
@@ -36,7 +36,8 @@ public class LearningMaterial {
     @Column(name = "file_path", nullable = false, length = 500)
     private String filePath;
 
-    @Column(name = "file_type", nullable = false, length = 50)
+    // file_type 컬럼 길이를 100으로 확장
+    @Column(name = "file_type", nullable = false, length = 100)
     private String fileType;
 
     @Column(name = "file_size", nullable = false)
@@ -61,7 +62,8 @@ public class LearningMaterial {
             this.filePath = filePath.trim();
         }
         if (fileType != null && !fileType.trim().isEmpty()) {
-            this.fileType = fileType.trim().toLowerCase();
+            // MIME 타입을 그대로 저장 (길이 제한 해결됨)
+            this.fileType = fileType.trim();
         }
         if (fileSize != null && fileSize >= 0) {
             this.fileSize = fileSize;
@@ -99,67 +101,55 @@ public class LearningMaterial {
     }
 
     /**
-     * 이미지 파일 여부 확인
+     * 파일 타입 카테고리 반환 (표시용)
      */
-    public boolean isImageFile() {
+    public String getFileTypeCategory() {
         String extension = getFileExtension();
-        return extension.matches("(jpg|jpeg|png|gif|bmp|svg|webp)");
-    }
 
-    /**
-     * 비디오 파일 여부 확인
-     */
-    public boolean isVideoFile() {
-        String extension = getFileExtension();
-        return extension.matches("(mp4|avi|mov|wmv|flv|webm|mkv)");
-    }
-
-    /**
-     * PDF 파일 여부 확인
-     */
-    public boolean isPdfFile() {
-        return "pdf".equals(getFileExtension());
-    }
-
-    /**
-     * 압축 파일 여부 확인
-     */
-    public boolean isArchiveFile() {
-        String extension = getFileExtension();
-        return extension.matches("(zip|rar|7z|tar|gz)");
-    }
-
-    /**
-     * 문서 파일 여부 확인
-     */
-    public boolean isDocumentFile() {
-        String extension = getFileExtension();
-        return extension.matches("(doc|docx|ppt|pptx|xls|xlsx|txt|rtf)");
-    }
-
-    /**
-     * 다운로드 가능한 파일인지 확인
-     */
-    public boolean isDownloadable() {
-        return filePath != null && !filePath.trim().isEmpty();
-    }
-
-    /**
-     * 파일 타입에 따른 아이콘 클래스 반환 (프론트엔드에서 사용)
-     */
-    public String getIconClass() {
-        if (isImageFile()) {
-            return "fa-image";
-        } else if (isVideoFile()) {
-            return "fa-video";
-        } else if (isPdfFile()) {
-            return "fa-file-pdf";
-        } else if (isDocumentFile()) {
-            return "fa-file-word";
-        } else if (isArchiveFile()) {
-            return "fa-file-archive";
-        } else {
-            return "fa-file";
+        switch (extension) {
+            case "pdf":
+                return "PDF";
+            case "doc":
+            case "docx":
+                return "문서";
+            case "ppt":
+            case "pptx":
+                return "프레젠테이션";
+            case "mp4":
+            case "avi":
+            case "mov":
+                return "비디오";
+            case "jpg":
+            case "jpeg":
+            case "png":
+            case "gif":
+                return "이미지";
+            default:
+                return "기타";
         }
+    }
+
+    /**
+     * 파일이 이미지인지 확인
+     */
+    public boolean isImage() {
+        String extension = getFileExtension();
+        return extension.matches("jpg|jpeg|png|gif|bmp|webp");
+    }
+
+    /**
+     * 파일이 비디오인지 확인
+     */
+    public boolean isVideo() {
+        String extension = getFileExtension();
+        return extension.matches("mp4|avi|mov|wmv|flv|webm");
+    }
+
+    /**
+     * 파일이 문서인지 확인
+     */
+    public boolean isDocument() {
+        String extension = getFileExtension();
+        return extension.matches("pdf|doc|docx|ppt|pptx|txt");
     }
 }

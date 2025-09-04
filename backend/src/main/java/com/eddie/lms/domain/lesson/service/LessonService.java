@@ -9,12 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 수업 서비스 (실시간 세션 관련 코드 제거)
+ * 수업 서비스
  */
 @Slf4j
 @Service
@@ -25,7 +24,6 @@ public class LessonService {
     private final LessonRepository lessonRepository;
     private final CurriculumRepository curriculumRepository;
     private final LearningMaterialRepository learningMaterialRepository;
-    private final LearningProgressRepository learningProgressRepository;
 
     // ============================================================================
     // 수업 관리
@@ -43,25 +41,19 @@ public class LessonService {
             validateCurriculumExists(request.getCurriculumId(), classroomId);
         }
 
-        // 수업 엔티티 생성 (실시간 세션 필드 제거)
+        // 수업 엔티티 생성
         Lesson lesson = Lesson.builder()
                 .classroomId(classroomId)
                 .curriculumId(request.getCurriculumId())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .lessonType(request.getLessonType())
-                .isCompleted(false)
                 .build();
 
         lesson = lessonRepository.save(lesson);
 
-        // 학습 자료 추가
-        if (request.getMaterials() != null && !request.getMaterials().isEmpty()) {
-            addMaterialsToLesson(lesson, request.getMaterials());
-        }
-
         log.info("Lesson created successfully with ID: {}", lesson.getLessonId());
-        return convertToLessonResponse(lesson, null);
+        return convertToLessonResponse(lesson);
     }
 
     /**
@@ -78,7 +70,7 @@ public class LessonService {
             validateCurriculumExists(request.getCurriculumId(), classroomId);
         }
 
-        // 수업 정보 업데이트 (실시간 세션 필드 제거)
+        // 수업 정보 업데이트
         lesson.updateInfo(
                 request.getTitle(),
                 request.getDescription(),
@@ -89,19 +81,10 @@ public class LessonService {
             lesson.setCurriculumId(request.getCurriculumId());
         }
 
-        if (request.getIsCompleted() != null) {
-            lesson.setIsCompleted(request.getIsCompleted());
-        }
-
-        // 학습 자료 업데이트
-        if (request.getMaterials() != null) {
-            updateLessonMaterials(lesson, request.getMaterials());
-        }
-
         lesson = lessonRepository.save(lesson);
         log.info("Lesson updated successfully: {}", lessonId);
 
-        return convertToLessonResponse(lesson, null);
+        return convertToLessonResponse(lesson);
     }
 
     /**
@@ -126,7 +109,7 @@ public class LessonService {
         List<Lesson> lessons = lessonRepository.findByClassroomIdOrderByCreatedAtDesc(classroomId);
 
         return lessons.stream()
-                .map(lesson -> convertToLessonResponse(lesson, userId))
+                .map(this::convertToLessonResponse)
                 .collect(Collectors.toList());
     }
 
@@ -137,21 +120,7 @@ public class LessonService {
         log.info("Fetching lesson detail: {} for user: {}", lessonId, userId);
 
         Lesson lesson = findLessonByIdAndClassroom(lessonId, classroomId);
-        return convertToLessonResponse(lesson, userId);
-    }
-
-    /**
-     * 수업 완료 상태 변경
-     */
-    @Transactional
-    public LessonResponse toggleLessonCompletion(Long classroomId, Long lessonId) {
-        log.info("Toggling completion status for lesson: {}", lessonId);
-
-        Lesson lesson = findLessonByIdAndClassroom(lessonId, classroomId);
-        lesson.toggleCompletion();
-        lesson = lessonRepository.save(lesson);
-
-        return convertToLessonResponse(lesson, null);
+        return convertToLessonResponse(lesson);
     }
 
     // ============================================================================
@@ -245,160 +214,6 @@ public class LessonService {
     }
 
     // ============================================================================
-    // 학습 진도 관리
-    // ============================================================================
-
-    /**
-     * 학습 진도 업데이트
-     */
-    @Transactional
-    public LearningProgressResponse updateLearningProgress(Long classroomId, Long lessonId,
-                                                           Long userId, LearningProgressUpdateRequest request) {
-        log.info("Updating learning progress for lesson: {} by user: {}", lessonId, userId);
-
-        // 수업 존재 확인
-        findLessonByIdAndClassroom(lessonId, classroomId);
-
-        // 기존 진도 조회 또는 새로 생성
-        LearningProgress progress = learningProgressRepository
-                .findByUserIdAndLessonLessonId(userId, lessonId)
-                .orElseGet(() -> {
-                    Lesson lesson = lessonRepository.findById(lessonId)
-                            .orElseThrow(() -> new IllegalArgumentException("수업을 찾을 수 없습니다."));
-
-                    return LearningProgress.builder()
-                            .userId(userId)
-                            .lesson(lesson)
-                            .completionPercentage(BigDecimal.ZERO)
-                            .build();
-                });
-
-        progress.updateProgress(request.getCompletionPercentage());
-        progress = learningProgressRepository.save(progress);
-
-        return convertToLearningProgressResponse(progress);
-    }
-
-    /**
-     * 사용자의 학습 진도 조회
-     */
-    public LearningProgressResponse getLearningProgress(Long classroomId, Long lessonId, Long userId) {
-        log.info("Fetching learning progress for lesson: {} by user: {}", lessonId, userId);
-
-        // 수업 존재 확인
-        findLessonByIdAndClassroom(lessonId, classroomId);
-
-        LearningProgress progress = learningProgressRepository
-                .findByUserIdAndLessonLessonId(userId, lessonId)
-                .orElse(null);
-
-        if (progress == null) {
-            // 진도 기록이 없으면 0% 상태로 반환
-            return LearningProgressResponse.builder()
-                    .userId(userId)
-                    .lessonId(lessonId)
-                    .completionPercentage(BigDecimal.ZERO)
-                    .progressStatus("미시작")
-                    .isCompleted(false)
-                    .isStarted(false)
-                    .build();
-        }
-
-        return convertToLearningProgressResponse(progress);
-    }
-
-    /**
-     * 수업별 전체 학습 진도 통계 조회 (교육자용)
-     */
-    public LessonResponse.LessonProgressInfo getLessonProgressStatistics(Long classroomId, Long lessonId) {
-        log.info("Fetching progress statistics for lesson: {}", lessonId);
-
-        // 수업 존재 확인
-        findLessonByIdAndClassroom(lessonId, classroomId);
-
-        List<LearningProgress> allProgress = learningProgressRepository.findByLessonLessonIdOrderByCompletionPercentageDesc(lessonId);
-        long totalStudents = allProgress.size();
-        long completedStudents = learningProgressRepository.countCompletedStudents(lessonId);
-        long startedStudents = learningProgressRepository.countStartedStudents(lessonId);
-        BigDecimal averageProgress = learningProgressRepository.getAverageProgressByLesson(lessonId);
-
-        LessonResponse.LessonProgressInfo progressInfo = new LessonResponse.LessonProgressInfo();
-        progressInfo.setTotalStudents(totalStudents);
-        progressInfo.setCompletedStudents(completedStudents);
-        progressInfo.setStartedStudents(startedStudents);
-        progressInfo.setAverageProgress(averageProgress != null ? averageProgress.doubleValue() : 0.0);
-        progressInfo.setCompletionRate(totalStudents > 0 ? (completedStudents * 100 / totalStudents) : 0);
-
-        return progressInfo;
-    }
-
-    // ============================================================================
-    // 통계 및 검색
-    // ============================================================================
-
-    /**
-     * 클래스룸 수업 통계 조회
-     */
-    public LessonStatisticsResponse getClassroomLessonStatistics(Long classroomId) {
-        log.info("Fetching lesson statistics for classroom: {}", classroomId);
-
-        // 기본 수업 통계
-        Object[] lessonStats = lessonRepository.getLessonStatistics(classroomId);
-        Long totalLessons = (Long) lessonStats[0];
-        Long completedLessons = (Long) lessonStats[1];
-        Long videoLessons = (Long) lessonStats[2];
-        Long documentLessons = (Long) lessonStats[3];
-
-        Double averageDuration = lessonRepository.getAverageDuration(classroomId);
-        Long totalMaterials = learningMaterialRepository.countByClassroomId(classroomId);
-        Long totalFileSize = learningMaterialRepository.getTotalFileSize(classroomId);
-
-        // 진도 통계
-        Object[] progressStats = learningProgressRepository.getProgressStatistics(classroomId);
-        Long completedStudentsCount = (Long) progressStats[0];
-        Long inProgressStudentsCount = (Long) progressStats[1];
-        Long notStartedStudentsCount = (Long) progressStats[2];
-        Long totalStudents = completedStudentsCount + inProgressStudentsCount + notStartedStudentsCount;
-
-        BigDecimal overallProgress = learningProgressRepository.getAverageProgressByClassroom(classroomId);
-
-        // 인기 수업 및 저조한 수업
-        List<Object[]> popularLessonsData = learningProgressRepository.findPopularLessons(classroomId, 5);
-        List<Object[]> lowProgressLessonsData = learningProgressRepository.findLowProgressLessons(classroomId, 5);
-
-        return LessonStatisticsResponse.builder()
-                .totalLessons(totalLessons)
-                .completedLessons(completedLessons)
-                .videoLessons(videoLessons)
-                .documentLessons(documentLessons)
-                .averageDuration(averageDuration)
-                .totalMaterials(totalMaterials)
-                .totalFileSize(totalFileSize)
-                .totalStudents(totalStudents)
-                .activeStudents(inProgressStudentsCount + completedStudentsCount)
-                .overallProgress(overallProgress != null ? overallProgress.doubleValue() : 0.0)
-                .completedStudentsCount(completedStudentsCount)
-                .inProgressStudentsCount(inProgressStudentsCount)
-                .notStartedStudentsCount(notStartedStudentsCount)
-                .popularLessons(convertToPopularLessonInfo(popularLessonsData))
-                .lowProgressLessons(convertToPopularLessonInfo(lowProgressLessonsData))
-                .build();
-    }
-
-    /**
-     * 수업 검색
-     */
-    public List<LessonResponse> searchLessons(Long classroomId, String keyword, Long userId) {
-        log.info("Searching lessons in classroom: {} with keyword: {}", classroomId, keyword);
-
-        List<Lesson> lessons = lessonRepository.searchLessons(classroomId, keyword);
-
-        return lessons.stream()
-                .map(lesson -> convertToLessonResponse(lesson, userId))
-                .collect(Collectors.toList());
-    }
-
-    // ============================================================================
     // 유틸리티 메서드
     // ============================================================================
 
@@ -424,122 +239,43 @@ public class LessonService {
         }
     }
 
-    private void addMaterialsToLesson(Lesson lesson, List<LearningMaterialCreateRequest> materialRequests) {
-        for (LearningMaterialCreateRequest materialRequest : materialRequests) {
-            LearningMaterial material = LearningMaterial.builder()
-                    .lesson(lesson)
-                    .title(materialRequest.getTitle())
-                    .fileName(materialRequest.getFileName())
-                    .filePath(materialRequest.getFilePath() != null ? materialRequest.getFilePath() : "")
-                    .fileType(materialRequest.getFileType())
-                    .fileSize(materialRequest.getFileSize() != null ? materialRequest.getFileSize() : 0L)
-                    .build();
-
-            lesson.addMaterial(material);
-        }
-    }
-
-    private void updateLessonMaterials(Lesson lesson, List<LearningMaterialCreateRequest> materialRequests) {
-        // 기존 자료 삭제
-        lesson.getMaterials().clear();
-
-        // 새 자료 추가
-        if (!materialRequests.isEmpty()) {
-            addMaterialsToLesson(lesson, materialRequests);
-        }
-    }
-
     // ============================================================================
-    // 변환 메서드 (실시간 세션 관련 제거)
+    // 변환 메서드 (단순화됨)
     // ============================================================================
 
-    private LessonResponse convertToLessonResponse(Lesson lesson, Long userId) {
-        // 학습 자료 변환
-        List<LearningMaterialResponse> materials = lesson.getMaterials().stream()
-                .map(this::convertToLearningMaterialResponse)
-                .collect(Collectors.toList());
+    /**
+     * 수업 엔티티를 응답 DTO로 변환 (진도 추적 기능 제거됨)
+     */
+    private LessonResponse convertToLessonResponse(Lesson lesson) {
+        LessonResponse response = LessonResponse.builder()
+                .lessonId(lesson.getLessonId())
+                .curriculumId(lesson.getCurriculumId())
+                .title(lesson.getTitle())
+                .description(lesson.getDescription())
+                .lessonType(lesson.getLessonType())
+                .lessonTypeName(lesson.getLessonType().getDisplayName())
+                .status("활성") // 단순한 상태
+                .createdAt(lesson.getCreatedAt())
+                .updatedAt(lesson.getUpdatedAt())
+                .build();
 
-        // 커리큘럼 정보
-        String curriculumTitle = null;
-        if (lesson.getCurriculumId() != null) {
-            curriculumTitle = curriculumRepository.findById(lesson.getCurriculumId())
-                    .map(Curriculum::getTitle)
-                    .orElse(null);
+        // 커리큘럼 정보 추가
+        if (lesson.getCurriculum() != null) {
+            response.setCurriculumTitle(lesson.getCurriculum().getTitle());
         }
 
-        LessonResponse response = new LessonResponse();
-        response.setLessonId(lesson.getLessonId());
-        response.setCurriculumId(lesson.getCurriculumId());
-        response.setCurriculumTitle(curriculumTitle);
-        response.setTitle(lesson.getTitle());
-        response.setDescription(lesson.getDescription());
-        response.setLessonType(lesson.getLessonType());
-        response.setLessonTypeName(lesson.getLessonType().getDisplayName());
-        response.setIsCompleted(lesson.getIsCompleted());
-        response.setStatus(lesson.getStatus());
-        response.setCreatedAt(lesson.getCreatedAt());
-        response.setUpdatedAt(lesson.getUpdatedAt());
-        response.setMaterials(materials);
-
-        // 개인 학습 진도 추가 (학습자용)
-        if (userId != null) {
-            LearningProgress progress = learningProgressRepository
-                    .findByUserIdAndLessonLessonId(userId, lesson.getLessonId())
-                    .orElse(null);
-
-            if (progress != null) {
-                LessonResponse.PersonalProgressInfo personalProgress = new LessonResponse.PersonalProgressInfo();
-                personalProgress.setCompletionPercentage(progress.getProgressAsDouble());
-                personalProgress.setLastAccessed(progress.getLastAccessed());
-                personalProgress.setCompletedAt(progress.getCompletedAt());
-                personalProgress.setProgressStatus(progress.getProgressStatus());
-                personalProgress.setIsAccessible(lesson.canStart());
-                response.setPersonalProgress(personalProgress);
-            } else {
-                LessonResponse.PersonalProgressInfo personalProgress = new LessonResponse.PersonalProgressInfo();
-                personalProgress.setCompletionPercentage(0.0);
-                personalProgress.setProgressStatus("미시작");
-                personalProgress.setIsAccessible(lesson.canStart());
-                response.setPersonalProgress(personalProgress);
-            }
-        } else {
-            // 교육자용 - 전체 진도 통계
-            LessonResponse.LessonProgressInfo progressInfo = getLessonProgressStatistics(
-                    lesson.getClassroomId(), lesson.getLessonId());
-            response.setProgressInfo(progressInfo);
-        }
+        // 선택적: 기본 통계 정보
+        response.setTotalMaterials(learningMaterialRepository.countByLessonLessonId(lesson.getLessonId()));
 
         return response;
-    }
-
-    private LearningMaterialResponse convertToLearningMaterialResponse(LearningMaterial material) {
-        return LearningMaterialResponse.builder()
-                .materialId(material.getMaterialId())
-                .title(material.getTitle())
-                .fileName(material.getFileName())
-                .filePath(material.getFilePath())
-                .fileType(material.getFileType())
-                .fileSize(material.getFileSize())
-                .formattedFileSize(material.getFormattedFileSize())
-                .uploadedAt(material.getUploadedAt())
-                .iconClass(material.getIconClass())
-                .isDownloadable(material.isDownloadable())
-                .build();
     }
 
     private CurriculumResponse convertToCurriculumResponse(Curriculum curriculum) {
         // 포함된 수업들
         List<Lesson> lessons = lessonRepository.findByCurriculumIdOrderByCreatedAtAsc(curriculum.getCurriculumId());
         List<LessonResponse> lessonResponses = lessons.stream()
-                .map(lesson -> convertToLessonResponse(lesson, null))
+                .map(this::convertToLessonResponse)
                 .collect(Collectors.toList());
-
-        // 다음 수업
-        LessonResponse nextLesson = null;
-        Lesson nextLessonEntity = curriculum.getNextLesson();
-        if (nextLessonEntity != null) {
-            nextLesson = convertToLessonResponse(nextLessonEntity, null);
-        }
 
         return CurriculumResponse.builder()
                 .curriculumId(curriculum.getCurriculumId())
@@ -548,42 +284,39 @@ public class LessonService {
                 .orderIndex(curriculum.getOrderIndex())
                 .createdAt(curriculum.getCreatedAt())
                 .updatedAt(curriculum.getUpdatedAt())
-                .lessonCount(curriculum.getLessonCount())
-                .completedLessonCount(curriculum.getCompletedLessonCount())
-                .progressPercentage(curriculum.getProgressPercentage())
-                .totalDurationMinutes(curriculum.getTotalDurationMinutes())
+                .lessonCount(lessons.size())
                 .lessons(lessonResponses)
-                .nextLesson(nextLesson)
                 .build();
     }
 
-    private LearningProgressResponse convertToLearningProgressResponse(LearningProgress progress) {
-        return LearningProgressResponse.builder()
-                .progressId(progress.getProgressId())
-                .userId(progress.getUserId())
-                .lessonId(progress.getLesson().getLessonId())
-                .lessonTitle(progress.getLesson().getTitle())
-                .completionPercentage(progress.getCompletionPercentage())
-                .lastAccessed(progress.getLastAccessed())
-                .completedAt(progress.getCompletedAt())
-                .createdAt(progress.getCreatedAt())
-                .updatedAt(progress.getUpdatedAt())
-                .progressStatus(progress.getProgressStatus())
-                .isCompleted(progress.isCompleted())
-                .isStarted(progress.isStarted())
-                .daysSinceLastAccess(progress.getDaysSinceLastAccess())
-                .learningDurationHours(progress.getLearningDurationHours())
-                .isRecentlyAccessed(progress.isRecentlyAccessed())
-                .build();
-    }
+    // StorageStatistics DTO (그대로 유지)
+    @lombok.Getter
+    @lombok.Setter
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    @lombok.Builder
+    public static class StorageStatistics {
+        private Long totalFileCount;
+        private Long totalFileSize;
+        private List<Object[]> fileTypeStatistics;
 
-    private List<LessonStatisticsResponse.PopularLessonInfo> convertToPopularLessonInfo(List<Object[]> data) {
-        return data.stream()
-                .map(row -> LessonStatisticsResponse.PopularLessonInfo.builder()
-                        .lessonId((Long) row[0])
-                        .title((String) row[1])
-                        .averageProgress(((BigDecimal) row[2]).doubleValue())
-                        .build())
-                .collect(Collectors.toList());
+        public String getFormattedTotalSize() {
+            return formatFileSize(totalFileSize);
+        }
+
+        private String formatFileSize(long bytes) {
+            if (bytes == 0) return "0 B";
+
+            String[] units = {"B", "KB", "MB", "GB", "TB"};
+            int unitIndex = 0;
+            double size = bytes;
+
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return String.format("%.1f %s", size, units[unitIndex]);
+        }
     }
 }

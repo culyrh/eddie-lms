@@ -4,8 +4,6 @@ import com.eddie.lms.domain.lesson.entity.Lesson;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
-import java.util.List;
-
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,6 +22,4 @@ public class LessonUpdateRequest {
     private Long curriculumId;
 
     private Boolean isCompleted;
-
-    private List<LearningMaterialCreateRequest> materials;
 }

@@ -1,6 +1,4 @@
-// userApi.js - 사용자 관련 API 서비스
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080/api';
 
 // API 요청을 위한 기본 헤더 생성
 const getAuthHeaders = () => {

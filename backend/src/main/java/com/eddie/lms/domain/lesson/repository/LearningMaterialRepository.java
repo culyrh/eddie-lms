@@ -8,25 +8,21 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-/**
- * 학습 자료 레포지토리
- */
 @Repository
 public interface LearningMaterialRepository extends JpaRepository<LearningMaterial, Long> {
 
     /**
-     * 수업별 학습 자료 조회
+     * 특정 수업의 학습자료 목록을 업로드 시간 순으로 조회
      */
     List<LearningMaterial> findByLessonLessonIdOrderByUploadedAtAsc(Long lessonId);
 
     /**
-     * 특정 파일 타입의 자료 조회
+     * 특정 수업의 학습자료 목록을 업로드 시간 역순으로 조회
      */
-    List<LearningMaterial> findByLessonLessonIdAndFileTypeOrderByUploadedAtAsc(
-            Long lessonId, String fileType);
+    List<LearningMaterial> findByLessonLessonIdOrderByUploadedAtDesc(Long lessonId);
 
     /**
-     * 클래스룸의 모든 학습 자료 조회
+     * 클래스룸의 모든 학습자료 조회
      */
     @Query("SELECT lm FROM LearningMaterial lm " +
             "JOIN lm.lesson l " +
@@ -35,22 +31,30 @@ public interface LearningMaterialRepository extends JpaRepository<LearningMateri
     List<LearningMaterial> findByClassroomId(@Param("classroomId") Long classroomId);
 
     /**
-     * 자료 제목으로 검색
+     * 파일 타입별 학습자료 조회
      */
-    @Query("SELECT lm FROM LearningMaterial lm " +
-            "WHERE lm.lesson.lessonId = :lessonId " +
-            "AND LOWER(lm.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-            "ORDER BY lm.uploadedAt DESC")
-    List<LearningMaterial> searchMaterials(@Param("lessonId") Long lessonId,
-                                           @Param("keyword") String keyword);
+    List<LearningMaterial> findByLessonLessonIdAndFileTypeOrderByUploadedAtDesc(
+            Long lessonId, String fileType);
 
     /**
-     * 수업별 자료 개수 조회
+     * 제목으로 학습자료 검색
+     */
+    List<LearningMaterial> findByLessonLessonIdAndTitleContainingIgnoreCaseOrderByUploadedAtDesc(
+            Long lessonId, String title);
+
+    /**
+     * 파일명으로 학습자료 검색
+     */
+    List<LearningMaterial> findByLessonLessonIdAndFileNameContainingIgnoreCaseOrderByUploadedAtDesc(
+            Long lessonId, String fileName);
+
+    /**
+     * 특정 수업의 학습자료 개수 조회
      */
     long countByLessonLessonId(Long lessonId);
 
     /**
-     * 클래스룸별 총 자료 개수
+     * 특정 클래스룸의 전체 학습자료 개수 조회
      */
     @Query("SELECT COUNT(lm) FROM LearningMaterial lm " +
             "JOIN lm.lesson l " +
@@ -58,30 +62,31 @@ public interface LearningMaterialRepository extends JpaRepository<LearningMateri
     long countByClassroomId(@Param("classroomId") Long classroomId);
 
     /**
-     * 클래스룸별 자료 타입 통계
+     * 특정 수업에서 파일 경로로 학습자료 존재 여부 확인
      */
-    @Query("SELECT lm.fileType, COUNT(lm) FROM LearningMaterial lm " +
-            "JOIN lm.lesson l " +
-            "WHERE l.classroomId = :classroomId " +
-            "GROUP BY lm.fileType " +
-            "ORDER BY COUNT(lm) DESC")
-    List<Object[]> getFileTypeStatistics(@Param("classroomId") Long classroomId);
+    boolean existsByLessonLessonIdAndFilePath(Long lessonId, String filePath);
 
     /**
-     * 총 파일 크기 계산
+     * 특정 수업의 특정 파일 타입 학습자료 개수
      */
-    @Query("SELECT SUM(lm.fileSize) FROM LearningMaterial lm " +
+    long countByLessonLessonIdAndFileType(Long lessonId, String fileType);
+
+    /**
+     * 특정 클래스룸의 총 파일 크기 조회
+     */
+    @Query("SELECT COALESCE(SUM(lm.fileSize), 0) FROM LearningMaterial lm " +
             "JOIN lm.lesson l " +
             "WHERE l.classroomId = :classroomId")
     Long getTotalFileSize(@Param("classroomId") Long classroomId);
 
     /**
-     * 특정 크기 이상의 대용량 파일 조회
+     * 클래스룸의 파일 타입별 통계 조회
      */
-    @Query("SELECT lm FROM LearningMaterial lm " +
-            "WHERE lm.lesson.lessonId = :lessonId " +
-            "AND lm.fileSize > :minSize " +
-            "ORDER BY lm.fileSize DESC")
-    List<LearningMaterial> findLargeFiles(@Param("lessonId") Long lessonId,
-                                          @Param("minSize") Long minSize);
+    @Query("SELECT lm.fileType, COUNT(lm), COALESCE(SUM(lm.fileSize), 0) " +
+            "FROM LearningMaterial lm " +
+            "JOIN lm.lesson l " +
+            "WHERE l.classroomId = :classroomId " +
+            "GROUP BY lm.fileType " +
+            "ORDER BY COUNT(lm) DESC")
+    List<Object[]> getFileTypeStatistics(@Param("classroomId") Long classroomId);
 }

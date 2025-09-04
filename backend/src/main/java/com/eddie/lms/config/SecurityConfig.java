@@ -76,7 +76,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/classrooms/*/assignments/*").hasRole("EDUCATOR")  // 과제 수정
                         .requestMatchers(HttpMethod.DELETE, "/api/classrooms/*/assignments/*").hasRole("EDUCATOR")  // 과제 삭제
                         .requestMatchers(HttpMethod.PUT, "/api/classrooms/*/assignments/*/submissions/*/grade").hasRole("EDUCATOR")  // 채점
-                        // 퀴즈 추가
                         .requestMatchers(HttpMethod.POST, "/api/classrooms/*/quizzes").hasRole("EDUCATOR")  // 퀴즈 생성
                         .requestMatchers(HttpMethod.PUT, "/api/classrooms/*/quizzes/*").hasRole("EDUCATOR")  // 퀴즈 수정
                         .requestMatchers(HttpMethod.DELETE, "/api/classrooms/*/quizzes/*").hasRole("EDUCATOR")  // 퀴즈 삭제
@@ -84,7 +83,6 @@ public class SecurityConfig {
                         // 학습자만 접근 가능한 엔드포인트
                         .requestMatchers(HttpMethod.POST, "/api/classrooms/*/assignments/*/submissions").hasRole("LEARNER")  // 과제 제출 (학습자만)
                         .requestMatchers(HttpMethod.POST, "/api/classrooms/*/quizzes/*/submit").hasRole("LEARNER")  // 퀴즈 제출
-                        // 퀴즈 세션 관리 (학습자만) - 새로 추가
                         .requestMatchers(HttpMethod.POST, "/api/quiz-sessions/start").hasRole("LEARNER")
                         .requestMatchers(HttpMethod.POST, "/api/quiz-sessions/*/progress").hasRole("LEARNER")
                         .requestMatchers(HttpMethod.POST, "/api/quiz-sessions/*/tab-switch").hasRole("LEARNER")
@@ -98,6 +96,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/classrooms/**").authenticated()  // 클래스룸 관련 조회
                         .requestMatchers(HttpMethod.POST, "/api/classrooms/join").authenticated()  // 클래스룸 참여
                         .requestMatchers(HttpMethod.GET, "/api/classrooms/*/quizzes/**").authenticated()  // 퀴즈 조회
+                        .requestMatchers(HttpMethod.GET, "/api/classrooms/*/lessons").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/classrooms/*/lessons/*/materials/upload/**").hasAnyRole("EDUCATOR", "LEARNER")
 
                         // 웹 페이지는 허용
                         .anyRequest().permitAll()

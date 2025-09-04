@@ -1,48 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Users, Calendar, Plus, Search } from 'lucide-react';
+// 기존 App.js에서 사용하는 api 객체를 import (만약 분리되어 있다면)
+// import api from '../services/api'; // 실제 api 객체 경로
 
-const Dashboard = ({ user }) => {
+const Dashboard = ({ user, accessToken }) => {
   const [classrooms, setClassrooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadClassrooms();
-  }, []);
+    if (user && accessToken) {
+      loadClassrooms();
+    }
+  }, [user, accessToken]);
 
+  // ============================================================================
+  // 기존 App.js와 동일한 방식으로 API 호출 (Mock 데이터 제거)
+  // ============================================================================
   const loadClassrooms = async () => {
     try {
-      // 실제 구현에서는 API 호출
-      // const response = await fetch('/api/classrooms/my');
-      // const data = await response.json();
+      setLoading(true);
+      setError(null);
       
-      // 임시 더미 데이터
-      setTimeout(() => {
-        setClassrooms([
-          {
-            id: 1,
-            name: '웹 개발 기초',
-            description: 'HTML, CSS, JavaScript 기초부터 차근차근',
-            instructor: '김강사',
-            memberCount: 25,
-            createdAt: '2024-07-15',
-            isOwner: user?.userType === 'EDUCATOR'
-          },
-          {
-            id: 2,
-            name: 'React 심화 과정',
-            description: 'React Hooks, Context API, 상태 관리까지',
-            instructor: '이선생',
-            memberCount: 18,
-            createdAt: '2024-08-01',
-            isOwner: false
-          }
-        ]);
-        setLoading(false);
-      }, 1000);
+      console.log(`🔍 클래스룸 목록 조회 시작: userId=${user.userId}`);
+      
+      // 기존 App.js에서 사용하는 방식과 동일하게 API 호출
+      const response = await fetch(`http://localhost:8080/api/classrooms/my-classrooms?userId=${user.userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+        } else if (response.status === 403) {
+          throw new Error('접근 권한이 없습니다.');
+        } else if (response.status === 404) {
+          throw new Error('클래스룸을 찾을 수 없습니다.');
+        }
+        throw new Error(`HTTP ${response.status}: 클래스룸 목록을 불러올 수 없습니다.`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ 클래스룸 목록 조회 성공:', data);
+      setClassrooms(data);
+      
     } catch (error) {
-      console.error('클래스룸 로드 실패:', error);
+      console.error('❌ 클래스룸 로드 실패:', error);
+      setError(error.message || '클래스룸 목록을 불러오는데 실패했습니다.');
+    } finally {
       setLoading(false);
     }
   };
@@ -56,17 +67,46 @@ const Dashboard = ({ user }) => {
     console.log('클래스룸 생성');
   };
 
+  // ============================================================================
+  // 로딩 및 에러 상태 렌더링
+  // ============================================================================
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 pt-16">
         <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <p className="ml-4 text-gray-600">클래스룸 정보를 불러오는 중...</p>
           </div>
         </div>
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16">
+        <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-500 mb-4">{error}</p>
+              <button
+                onClick={loadClassrooms}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                다시 시도
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // 메인 렌더링
+  // ============================================================================
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
@@ -106,7 +146,7 @@ const Dashboard = ({ user }) => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">총 멤버</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {classrooms.reduce((sum, classroom) => sum + classroom.memberCount, 0)}
+                  {classrooms.reduce((sum, classroom) => sum + (classroom.memberCount || 0), 0)}
                 </p>
               </div>
             </div>
@@ -119,7 +159,9 @@ const Dashboard = ({ user }) => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">이번 주 과제</p>
-                <p className="text-2xl font-semibold text-gray-900">3</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {classrooms.reduce((sum, classroom) => sum + (classroom.weeklyAssignments || 0), 0)}
+                </p>
               </div>
             </div>
           </div>
@@ -133,7 +175,7 @@ const Dashboard = ({ user }) => {
                 {user?.userType === 'EDUCATOR' ? '내 클래스룸' : '참여 중인 클래스룸'}
               </h2>
               <div className="flex space-x-3">
-                {/* 검색 (추후 구현) */}
+                {/* 검색 */}
                 <div className="relative">
                   <input
                     type="text"
@@ -175,13 +217,13 @@ const Dashboard = ({ user }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {classrooms.map((classroom) => (
                   <div
-                    key={classroom.id}
-                    onClick={() => handleClassroomClick(classroom.id)}
+                    key={classroom.classroomId} // 백엔드 응답 구조에 맞게 수정
+                    onClick={() => handleClassroomClick(classroom.classroomId)}
                     className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
-                        {classroom.name}
+                        {classroom.classroomName} {/* 백엔드 응답 구조에 맞게 수정 */}
                       </h3>
                       {classroom.isOwner && (
                         <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
@@ -197,10 +239,10 @@ const Dashboard = ({ user }) => {
                     <div className="flex items-center justify-between text-sm text-gray-500">
                       <div className="flex items-center">
                         <Users className="h-4 w-4 mr-1" />
-                        <span>{classroom.memberCount}명</span>
+                        <span>{classroom.memberCount || 0}명</span>
                       </div>
                       <div>
-                        강사: {classroom.instructor}
+                        강사: {classroom.educatorName || '미정'}
                       </div>
                     </div>
                     
@@ -214,7 +256,7 @@ const Dashboard = ({ user }) => {
           </div>
         </div>
 
-        {/* 최근 활동 (추후 구현) */}
+        {/* 최근 활동 */}
         <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">최근 활동</h2>

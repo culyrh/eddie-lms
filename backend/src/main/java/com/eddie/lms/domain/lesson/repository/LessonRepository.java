@@ -28,11 +28,6 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     List<Lesson> findByClassroomIdAndLessonTypeOrderByCreatedAtAsc(Long classroomId, Lesson.LessonType lessonType);
 
     /**
-     * 완료된 수업 개수 조회
-     */
-    long countByClassroomIdAndIsCompleted(Long classroomId, Boolean isCompleted);
-
-    /**
      * 특정 수업이 클래스룸에 속하는지 확인
      */
     Optional<Lesson> findByLessonIdAndClassroomId(Long lessonId, Long classroomId);
@@ -48,19 +43,39 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
                                @Param("keyword") String keyword);
 
     /**
-     * 클래스룸별 수업 통계 조회 (실시간 관련 제거)
+     * 클래스룸별 수업 통계 조회 (단순화됨)
      */
     @Query("SELECT " +
             "COUNT(l) as totalLessons, " +
-            "SUM(CASE WHEN l.isCompleted = true THEN 1 ELSE 0 END) as completedLessons, " +
             "SUM(CASE WHEN l.lessonType = 'VIDEO' THEN 1 ELSE 0 END) as videoLessons, " +
             "SUM(CASE WHEN l.lessonType = 'DOCUMENT' THEN 1 ELSE 0 END) as documentLessons " +
             "FROM Lesson l WHERE l.classroomId = :classroomId")
     Object[] getLessonStatistics(@Param("classroomId") Long classroomId);
 
     /**
-     * 평균 수업 시간 (제거 - duration 필드 없음)
+     * 커리큘럼별 수업 개수 조회
      */
-    @Query("SELECT 0.0 FROM Lesson l WHERE l.classroomId = :classroomId")
-    Double getAverageDuration(@Param("classroomId") Long classroomId);
+    long countByCurriculumId(Long curriculumId);
+
+    /**
+     * 클래스룸의 전체 수업 개수 조회
+     */
+    long countByClassroomId(Long classroomId);
+
+    /**
+     * 특정 유형의 수업 개수 조회
+     */
+    long countByClassroomIdAndLessonType(Long classroomId, Lesson.LessonType lessonType);
+
+    /**
+     * 최근 생성된 수업 조회
+     */
+    @Query("SELECT l FROM Lesson l WHERE l.classroomId = :classroomId " +
+            "ORDER BY l.createdAt DESC LIMIT 5")
+    List<Lesson> findRecentLessons(@Param("classroomId") Long classroomId);
+
+    /**
+     * 수업이 존재하는지 확인
+     */
+    boolean existsByLessonIdAndClassroomId(Long lessonId, Long classroomId);
 }
