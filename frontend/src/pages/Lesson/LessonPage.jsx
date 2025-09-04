@@ -47,6 +47,13 @@ const LessonPage = ({ classroomId, currentUser, accessToken }) => {
     loadLessons();
   }, [loadLessons]); // loadLessons dependency 추가
 
+  // 클래스룸이 바뀔 때 상태 초기화
+  useEffect(() => {
+    setSelectedLesson(null);
+    setLearningMaterials([]);
+    setError('');
+  }, [classroomId]);
+
   // 학습자료 목록 로드
   const loadLearningMaterials = async (lessonId) => {
     try {
