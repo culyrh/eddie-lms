@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, FileText, Video, Play, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, FileText, Video, Play, AlertCircle, Upload, Trash2 } from 'lucide-react';
 import lessonService from '../../services/lessonService';
+import multipartUploadService from '../../services/multipartUploadService';
 
 const LessonForm = ({ 
   lesson = null, 
@@ -21,6 +22,7 @@ const LessonForm = ({
   
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState([]);
 
   const isEditing = lesson !== null;
 
@@ -39,11 +41,86 @@ const LessonForm = ({
   }, [lesson]);
 
   // ============================================================================
+  // 파일 업로드 관련 핸들러
+  // ============================================================================
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    
+    // 영상수업일 경우 영상 파일 개수 제한
+    if (formData.lessonType === 'VIDEO') {
+      const existingVideoFiles = attachedFiles.filter(file => file.type.startsWith('video/'));
+      const newVideoFiles = files.filter(file => file.type.startsWith('video/'));
+      
+      if (existingVideoFiles.length + newVideoFiles.length > 1) {
+        setErrors({ fileUpload: '영상 수업은 하나의 영상 파일만 업로드할 수 있습니다.' });
+        return;
+      }
+    }
+
+    // 파일 크기 제한 (100MB)
+    const maxSize = 100 * 1024 * 1024;
+    const oversizedFiles = files.filter(file => file.size > maxSize);
+    if (oversizedFiles.length > 0) {
+      setErrors({ fileUpload: '파일 크기는 100MB를 초과할 수 없습니다.' });
+      return;
+    }
+
+    setAttachedFiles(prev => [...prev, ...files]);
+    
+    // 파일 업로드 에러 제거
+    if (errors.fileUpload) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.fileUpload;
+        return newErrors;
+      });
+    }
+  };
+
+  const removeFile = (index) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getFileTypeInfo = (file) => {
+    if (file.type.startsWith('video/')) {
+      return { icon: <Video className="h-4 w-4" />, color: 'text-red-500', label: '영상' };
+    } else if (file.type.startsWith('image/')) {
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-green-500', label: '이미지' };
+    } else if (file.type.includes('pdf')) {
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-red-600', label: 'PDF' };
+    } else if (file.type.includes('presentation') || file.name.endsWith('.ppt') || file.name.endsWith('.pptx')) {
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-orange-500', label: 'PPT' };
+    } else if (file.type.includes('document') || file.name.endsWith('.doc') || file.name.endsWith('.docx')) {
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-blue-500', label: 'DOC' };
+    } else {
+      return { icon: <FileText className="h-4 w-4" />, color: 'text-gray-500', label: '파일' };
+    }
+  };
+
+  // ============================================================================
   // 폼 핸들러
   // ============================================================================
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
+    
+    // 수업 유형이 변경될 때 첨부파일 검증
+    if (name === 'lessonType') {
+      if (value === 'VIDEO') {
+        const videoFiles = attachedFiles.filter(file => file.type.startsWith('video/'));
+        if (videoFiles.length > 1) {
+          setErrors({ fileUpload: '영상 수업은 하나의 영상 파일만 업로드할 수 있습니다.' });
+          // 첫 번째 영상 파일만 남기고 나머지 제거
+          setAttachedFiles(prev => {
+            const nonVideoFiles = prev.filter(file => !file.type.startsWith('video/'));
+            const firstVideoFile = prev.find(file => file.type.startsWith('video/'));
+            return firstVideoFile ? [firstVideoFile, ...nonVideoFiles] : nonVideoFiles;
+          });
+        }
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: type === 'number' ? parseInt(value, 10) || 0 : value
@@ -84,6 +161,14 @@ const LessonForm = ({
       }
     }
 
+    // 영상수업 파일 검증
+    if (formData.lessonType === 'VIDEO' && attachedFiles.length > 0) {
+      const videoFiles = attachedFiles.filter(file => file.type.startsWith('video/'));
+      if (videoFiles.length > 1) {
+        errorObj.fileUpload = '영상 수업은 하나의 영상 파일만 업로드할 수 있습니다.';
+      }
+    }
+
     setErrors(errorObj);
     return Object.keys(errorObj).length === 0;
   };
@@ -108,15 +193,67 @@ const LessonForm = ({
       const submitData = {
         ...formData,
         classroomId,
-        scheduledAt: scheduledAtISO // null이면 서버에서 처리하도록
+        scheduledAt: scheduledAtISO
       };
 
-      console.log('제출 데이터:', submitData); // 디버깅용
+      console.log('제출 데이터:', submitData);
 
+      let createdLesson;
       if (isEditing) {
-        await lessonService.updateLesson(classroomId, lesson.lessonId, submitData, currentUser?.token);
+        createdLesson = await lessonService.updateLesson(classroomId, lesson.lessonId, submitData, currentUser?.token);
       } else {
-        await lessonService.createLesson(classroomId, submitData, currentUser?.token);
+        createdLesson = await lessonService.createLesson(classroomId, submitData, currentUser?.token);
+      }
+
+      // 첨부파일이 있으면 업로드 (새 수업 생성 시만)
+      if (attachedFiles.length > 0 && !isEditing) {
+        const lessonId = createdLesson.lessonId || createdLesson.id;
+        console.log('파일 업로드 시작, lessonId:', lessonId);
+        
+        for (let i = 0; i < attachedFiles.length; i++) {
+          const file = attachedFiles[i];
+          try {
+            console.log(`파일 업로드 시작: ${file.name}`);
+            
+            // S3에 파일 업로드
+            const uploadResult = await multipartUploadService.uploadFile(
+              file,
+              null, // 진행률 콜백 제거 (배치 업로드이므로)
+              currentUser?.token
+            );
+
+            console.log(`S3 업로드 완료: ${uploadResult.fileUrl}`);
+
+            // 메타데이터 저장
+            const saveResponse = await fetch(
+              `http://localhost:8080/api/classrooms/${classroomId}/lessons/${lessonId}/materials`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${currentUser?.token}`
+                },
+                body: JSON.stringify({
+                  title: file.name,
+                  fileName: file.name,
+                  fileUrl: uploadResult.fileUrl,
+                  fileSize: file.size,
+                  fileType: file.type
+                })
+              }
+            );
+
+            if (!saveResponse.ok) {
+              const errorText = await saveResponse.text();
+              throw new Error(`메타데이터 저장 실패: ${errorText}`);
+            }
+
+            console.log(`파일 업로드 완료: ${file.name}`);
+          } catch (uploadError) {
+            console.error(`파일 업로드 실패 (${file.name}):`, uploadError);
+            // 파일 업로드 실패해도 수업 생성은 성공으로 처리
+          }
+        }
       }
     
       onSubmit?.(submitData);
@@ -146,6 +283,14 @@ const LessonForm = ({
       case 'DOCUMENT': return '자료 수업';
       default: return '기타';
     }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -311,6 +456,77 @@ const LessonForm = ({
               </div>
             </div>
 
+            {/* 학습 자료 첨부 섹션 - 새 수업 생성 시만 표시 */}
+            {!isEditing && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  학습 자료 첨부 (선택사항)
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    id="file-upload"
+                    accept={formData.lessonType === 'VIDEO' ? 'video/*,.pdf,.ppt,.pptx,.doc,.docx' : '.pdf,.ppt,.pptx,.doc,.docx,image/*'}
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="cursor-pointer flex flex-col items-center"
+                  >
+                    <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-600">
+                      클릭하여 파일을 선택하거나 드래그 앤 드롭하세요
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1">
+                      {formData.lessonType === 'VIDEO' 
+                        ? '영상 파일 1개 + 추가 자료 (PDF, PPT, DOC, 이미지)'
+                        : '문서 파일 (PDF, PPT, DOC, 이미지)'
+                      }
+                    </span>
+                  </label>
+                </div>
+
+                {/* 첨부된 파일 목록 */}
+                {attachedFiles.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h4 className="text-sm font-medium text-gray-700">첨부된 파일 ({attachedFiles.length}개)</h4>
+                    {attachedFiles.map((file, index) => {
+                      const fileInfo = getFileTypeInfo(file);
+                      return (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <span className={fileInfo.color}>{fileInfo.icon}</span>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {fileInfo.label} • {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="p-1 text-gray-400 hover:text-red-500 rounded"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {errors.fileUpload && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    {errors.fileUpload}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* 수업 유형별 안내 */}
             <div className="bg-blue-50 p-4 rounded-lg">
               <div className="flex items-start space-x-3">
@@ -320,12 +536,20 @@ const LessonForm = ({
                     {getLessonTypeName(formData.lessonType)} 안내
                   </h4>
                   <p className="text-sm text-blue-800">
-                    {formData.lessonType === 'VIDEO' && '영상 파일을 업로드하면 학생들이 언제든 시청할 수 있습니다. 시청 진도율이 자동으로 추적됩니다.'}
+                    {formData.lessonType === 'VIDEO' && (
+                      <>
+                        영상 파일을 업로드하면 학생들이 언제든 시청할 수 있습니다. 시청 진도율이 자동으로 추적됩니다.
+                        <br />
+                        <strong>중요:</strong> 진도율 추적을 위해 영상 파일은 하나만 업로드할 수 있습니다.
+                      </>
+                    )}
                     {formData.lessonType === 'DOCUMENT' && 'PDF, PPT, Word 등의 문서를 업로드하면 학생들이 브라우저에서 바로 볼 수 있습니다.'}
                   </p>
-                  <p className="text-sm text-blue-700 mt-2 font-medium">
-                    📝 학습 자료 업로드는 수업 생성 후 수업 페이지에서 가능합니다.
-                  </p>
+                  {isEditing && (
+                    <p className="text-sm text-blue-700 mt-2 font-medium">
+                      📝 학습 자료 관리는 수업 상세 페이지에서 가능합니다.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

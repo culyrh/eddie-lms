@@ -1,27 +1,57 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Play, 
+  Pause, 
+  Volume2, 
+  VolumeX, 
+  SkipBack, 
+  SkipForward, 
+  Settings, 
+  Maximize, 
+  Minimize
+} from 'lucide-react';
+import progressTrackingService from '../services/progressTrackingService';
 
 const VideoPlayer = ({ 
   videoUrl, 
-  title, 
+  lessonId, 
+  userId, 
+  token,
   onProgressUpdate,
-  autoPlay = false,
-  controls = true 
+  initialProgress = 0,
+  autoPlay = false 
 }) => {
   const videoRef = useRef(null);
+  const progressUpdateIntervalRef = useRef(null);
+  const totalWatchTimeRef = useRef(0); // 누적 재생 시간
+  const lastPlayTimeRef = useRef(0); // 마지막 재생 시점
+  
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(initialProgress);
 
-  const controlsTimeoutRef = useRef(null);
+  // 진도율 업데이트 함수
+  const updateProgress = useCallback(() => {
+    if (duration === 0) return;
+    
+    const newProgress = (totalWatchTimeRef.current / duration) * 100;
+    const finalProgress = Math.min(newProgress, 100);
+    
+    setProgress(finalProgress);
+    
+    if (onProgressUpdate) {
+      onProgressUpdate(finalProgress);
+    }
+  }, [duration, onProgressUpdate]);
 
-  // 비디오 메타데이터 로드 시
+  // 비디오 이벤트 핸들러
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -29,135 +59,232 @@ const VideoPlayer = ({
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       setLoading(false);
-    };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
       
-      // 진행률 업데이트 콜백
-      if (onProgressUpdate && video.duration > 0) {
-        const progress = Math.round((video.currentTime / video.duration) * 100);
-        onProgressUpdate(progress, video.currentTime, video.duration);
+      // 초기 진도율이 있으면 해당 위치로 이동하고 시청 시간 설정
+      if (initialProgress > 0) {
+        const startTime = (initialProgress / 100) * video.duration;
+        video.currentTime = startTime;
+        setCurrentTime(startTime);
+        // 초기 시청 시간을 영상 길이로 제한
+        totalWatchTimeRef.current = Math.min((initialProgress / 100) * video.duration, video.duration);
+
+        updateProgress();
       }
     };
 
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => {
+    const handleTimeUpdate = () => {
+      const newTime = video.currentTime;
+      setCurrentTime(newTime);
+      // 진도율 계산은 여기서 하지 않음
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      lastPlayTimeRef.current = videoRef.current.currentTime;
+    };
+
+    const handlePause = () => {
       setIsPlaying(false);
-      setCurrentTime(0);
+    
+      // 재생된 시간만큼 누적 시청 시간에 추가
+      const currentVideoTime = videoRef.current.currentTime;
+      const playedDuration = currentVideoTime - lastPlayTimeRef.current;
+    
+      // 순차적으로 앞으로 재생된 경우만 시청 시간에 추가 (되감기 제외)
+      if (playedDuration > 0 && playedDuration <= 60) { // 최대 60초까지만 인정
+        totalWatchTimeRef.current += playedDuration;
+        console.log(`시청 시간 추가: ${playedDuration.toFixed(1)}s, 총: ${totalWatchTimeRef.current.toFixed(1)}s`);
+        
+        // 진도율 업데이트
+        updateProgress();
+      } else if (playedDuration <= 0) {
+        console.log('되감기 감지 - 시청 시간 추가 안함');
+      } else {
+        console.log('큰 점프 감지 - 시청 시간 추가 안함');
+      }
+    };
+
+    const handleVolumeChange = () => {
+      setVolume(video.volume);
+      setIsMuted(video.muted);
+    };
+
+    // 재생 속도 제한 (최대 2배속)
+    const handleRateChange = () => {
+      if (video.playbackRate > 2) {
+        video.playbackRate = 2;
+        setPlaybackRate(2);
+      } else {
+        setPlaybackRate(video.playbackRate);
+      }
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('ended', handleEnded);
+    video.addEventListener('volumechange', handleVolumeChange);
+    video.addEventListener('ratechange', handleRateChange);
 
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('volumechange', handleVolumeChange);
+      video.removeEventListener('ratechange', handleRateChange);
     };
-  }, [onProgressUpdate]);
+  }, [videoUrl, initialProgress, updateProgress]);
 
-  // 자동 숨김 컨트롤
+  // 진도율 자동 저장 (30초마다)
   useEffect(() => {
-    if (showControls && isPlaying) {
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false);
-      }, 3000);
-    }
+    if (isPlaying && lessonId && userId && token) {
+      progressUpdateIntervalRef.current = setInterval(async () => {
+        try {
+          await progressTrackingService.updateProgress(
+            lessonId, 
+            userId, 
+            currentTime, 
+            duration, 
+            token
+          );
+          
+          console.log(`진도율 자동 저장: ${progress.toFixed(1)}%`);
+        } catch (error) {
+          console.error('자동 진도율 저장 오류:', error);
+        }
+      }, 30000);
 
+      return () => {
+        if (progressUpdateIntervalRef.current) {
+          clearInterval(progressUpdateIntervalRef.current);
+        }
+      };
+    }
+  }, [isPlaying, lessonId, userId, token, currentTime, duration, progress]);
+
+  // 컴포넌트 언마운트 시 진도율 저장
+  useEffect(() => {
     return () => {
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
+      if (progressUpdateIntervalRef.current) {
+        clearInterval(progressUpdateIntervalRef.current);
+      }
+      
+      // 마지막 재생 세션의 시청 시간 추가
+      if (isPlaying && videoRef.current) {
+        const currentVideoTime = videoRef.current.currentTime;
+        const playedDuration = currentVideoTime - lastPlayTimeRef.current;
+        if (playedDuration > 0 && playedDuration <= 60) {
+          totalWatchTimeRef.current += playedDuration;
+          updateProgress();
+        }
+      }
+      
+      // 최종 진도율 저장
+      if (lessonId && userId && token && currentTime > 0) {
+        progressTrackingService.updateProgress(
+          lessonId, 
+          userId, 
+          currentTime,
+          duration, 
+          token
+        ).catch(console.error);
       }
     };
-  }, [showControls, isPlaying]);
+  }, [lessonId, userId, token, currentTime, duration, isPlaying, updateProgress]);
 
-  // 마우스 움직임 감지
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-  };
+  // 마우스 비활성화 타이머
+  useEffect(() => {
+    let hideControlsTimeout;
 
-  // 재생/일시정지 토글
+    const showControlsTemporarily = () => {
+      setShowControls(true);
+      clearTimeout(hideControlsTimeout);
+      hideControlsTimeout = setTimeout(() => {
+        if (isPlaying) {
+          setShowControls(false);
+        }
+      }, 3000);
+    };
+
+    const handleMouseMove = () => {
+      showControlsTemporarily();
+    };
+
+    const handleMouseLeave = () => {
+      if (isPlaying) {
+        setShowControls(false);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      clearTimeout(hideControlsTimeout);
+    };
+  }, [isPlaying]);
+
+  // 컨트롤 함수들
   const togglePlayPause = () => {
     const video = videoRef.current;
-    if (!video) return;
-
-    if (isPlaying) {
-      video.pause();
-    } else {
+    if (video.paused) {
       video.play();
+    } else {
+      video.pause();
     }
   };
 
-  // 볼륨 조절
-  const handleVolumeChange = (newVolume) => {
+  const handleVolumeChange = (e) => {
     const video = videoRef.current;
-    if (!video) return;
-
-    setVolume(newVolume);
+    const newVolume = parseFloat(e.target.value);
     video.volume = newVolume;
-    
-    if (newVolume === 0) {
-      setIsMuted(true);
-    } else if (isMuted) {
-      setIsMuted(false);
-    }
+    setVolume(newVolume);
+    setIsMuted(newVolume === 0);
   };
 
-  // 음소거 토글
   const toggleMute = () => {
     const video = videoRef.current;
-    if (!video) return;
-
-    if (isMuted) {
-      video.volume = volume;
-      setIsMuted(false);
-    } else {
-      video.volume = 0;
-      setIsMuted(true);
-    }
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
   };
 
-  // 시간 이동
-  const handleSeek = (newTime) => {
+  const skipBackward = () => {
     const video = videoRef.current;
-    if (!video) return;
-
+    const newTime = Math.max(0, video.currentTime - 10);
     video.currentTime = newTime;
-    setCurrentTime(newTime);
   };
 
-  // 10초 앞으로/뒤로
-  const skipTime = (seconds) => {
+  const skipForward = () => {
     const video = videoRef.current;
-    if (!video) return;
-
-    const newTime = Math.max(0, Math.min(duration, currentTime + seconds));
-    handleSeek(newTime);
+    const newTime = Math.min(duration, video.currentTime + 10);
+    video.currentTime = newTime;
   };
 
-  // 재생 속도 변경
-  const handlePlaybackRateChange = (rate) => {
+  const changePlaybackRate = (rate) => {
     const video = videoRef.current;
-    if (!video) return;
-
-    video.playbackRate = rate;
-    setPlaybackRate(rate);
+    const limitedRate = Math.min(rate, 2);
+    video.playbackRate = limitedRate;
+    setPlaybackRate(limitedRate);
   };
 
-  // 전체화면 토글
+  const handleSeek = (value) => {
+    const video = videoRef.current;
+    const seekTime = parseFloat(value);
+  
+    // 시킹 시에는 시청 시간 추가하지 않음 (pause/play에서만 처리)
+    if (isPlaying) {
+      lastPlayTimeRef.current = seekTime; // 위치만 업데이트
+    }
+  
+    video.currentTime = seekTime;
+  };
+
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      videoRef.current?.requestFullscreen();
+    if (!isFullscreen) {
+      videoRef.current.requestFullscreen();
       setIsFullscreen(true);
     } else {
       document.exitFullscreen();
@@ -165,7 +292,6 @@ const VideoPlayer = ({
     }
   };
 
-  // 시간 포맷팅
   const formatTime = (time) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
@@ -173,11 +299,7 @@ const VideoPlayer = ({
   };
 
   return (
-    <div 
-      className="relative bg-black rounded-lg overflow-hidden group"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => isPlaying && setShowControls(false)}
-    >
+    <div className="relative bg-black rounded-lg overflow-hidden group">
       {/* 비디오 엘리먼트 */}
       <video
         ref={videoRef}
@@ -186,6 +308,9 @@ const VideoPlayer = ({
         autoPlay={autoPlay}
         onClick={togglePlayPause}
         onDoubleClick={toggleFullscreen}
+        controlsList="nodownload nofullscreen noremoteplayback"
+        disablePictureInPicture
+        onContextMenu={(e) => e.preventDefault()}
       />
 
       {/* 로딩 스피너 */}
@@ -207,121 +332,101 @@ const VideoPlayer = ({
         </div>
       )}
 
+      {/* 진도율 표시 */}
+      <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm">
+        진도율: {Math.round(progress)}%
+      </div>
+
       {/* 컨트롤 바 */}
-      {controls && (
-        <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent p-4 transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0'
-        }`}>
-          {/* 진행률 바 */}
-          <div className="mb-4">
-            <input
-              type="range"
-              min="0"
-              max={duration}
-              value={currentTime}
-              onChange={(e) => handleSeek(parseFloat(e.target.value))}
-              className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-              style={{
-                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
-              }}
-            />
-          </div>
+      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent p-4 transition-opacity duration-300 ${
+        showControls ? 'opacity-100' : 'opacity-0'
+      }`}>
+        {/* 진행률 바 */}
+        <div className="mb-4">
+          <input
+            type="range"
+            min="0"
+            max={duration}
+            value={currentTime}
+            onChange={(e) => handleSeek(e.target.value)}
+            className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+            style={{
+              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
+            }}
+          />
+        </div>
 
-          {/* 컨트롤 버튼들 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* 재생/일시정지 */}
+        {/* 컨트롤 버튼들 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={togglePlayPause}
+              className="text-white hover:text-blue-400 transition-colors duration-200"
+            >
+              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+            </button>
+
+            <button
+              onClick={skipBackward}
+              className="text-white hover:text-blue-400 transition-colors duration-200"
+            >
+              <SkipBack className="h-5 w-5" />
+            </button>
+
+            <button
+              onClick={skipForward}
+              className="text-white hover:text-blue-400 transition-colors duration-200"
+            >
+              <SkipForward className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-2">
               <button
-                onClick={togglePlayPause}
+                onClick={toggleMute}
                 className="text-white hover:text-blue-400 transition-colors duration-200"
               >
-                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
-
-              {/* 10초 뒤로/앞으로 */}
-              <button
-                onClick={() => skipTime(-10)}
-                className="text-white hover:text-blue-400 transition-colors duration-200"
-              >
-                <SkipBack className="h-5 w-5" />
-              </button>
-              
-              <button
-                onClick={() => skipTime(10)}
-                className="text-white hover:text-blue-400 transition-colors duration-200"
-              >
-                <SkipForward className="h-5 w-5" />
-              </button>
-
-              {/* 볼륨 컨트롤 */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={toggleMute}
-                  className="text-white hover:text-blue-400 transition-colors duration-200"
-                >
-                  {isMuted || volume === 0 ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                </button>
-                
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                  className="w-20 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-
-              {/* 시간 표시 */}
-              <div className="text-white text-sm">
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={isMuted ? 0 : volume}
+                onChange={handleVolumeChange}
+                className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+              />
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* 재생 속도 */}
-              <div className="relative group">
-                <button className="text-white hover:text-blue-400 transition-colors duration-200">
-                  <Settings className="h-5 w-5" />
-                </button>
-                
-                <div className="absolute bottom-8 right-0 bg-black bg-opacity-80 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <div className="text-white text-sm mb-2">재생 속도</div>
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
-                    <button
-                      key={rate}
-                      onClick={() => handlePlaybackRateChange(rate)}
-                      className={`block w-full text-left px-2 py-1 text-sm rounded hover:bg-gray-700 ${
-                        playbackRate === rate ? 'text-blue-400' : 'text-white'
-                      }`}
-                    >
-                      {rate}x
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <span className="text-white text-sm">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          </div>
 
-              {/* 전체화면 */}
-              <button
-                onClick={toggleFullscreen}
-                className="text-white hover:text-blue-400 transition-colors duration-200"
-              >
-                <Maximize className="h-5 w-5" />
-              </button>
-            </div>
+          <div className="flex items-center gap-3">
+            {/* 재생 속도 (최대 2배속) */}
+            <select
+              value={playbackRate}
+              onChange={(e) => changePlaybackRate(parseFloat(e.target.value))}
+              className="bg-gray-800 text-white text-sm rounded px-2 py-1"
+            >
+              <option value={0.5}>0.5x</option>
+              <option value={0.75}>0.75x</option>
+              <option value={1}>1x</option>
+              <option value={1.25}>1.25x</option>
+              <option value={1.5}>1.5x</option>
+              <option value={2}>2x</option>
+            </select>
+
+            <button
+              onClick={toggleFullscreen}
+              className="text-white hover:text-blue-400 transition-colors duration-200"
+            >
+              {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+            </button>
           </div>
         </div>
-      )}
-
-      {/* 제목 */}
-      {title && (
-        <div className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-black to-transparent p-4 transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0'
-        }`}>
-          <h3 className="text-white text-lg font-semibold">{title}</h3>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

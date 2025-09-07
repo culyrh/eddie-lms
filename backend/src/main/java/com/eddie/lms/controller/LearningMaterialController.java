@@ -34,6 +34,9 @@ public class LearningMaterialController {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
+    @Value("${aws.s3.region}")
+    private String region;
+
     /**
      * 학습자료 목록 조회
      */
@@ -214,6 +217,42 @@ public class LearningMaterialController {
         }
     }
 
+    // 영상 스트리밍용 URL 생성 엔드포인트
+    @GetMapping("/{materialId}/stream")
+    public ResponseEntity<Map<String, Object>> getStreamingUrl(
+            @PathVariable Long classroomId,
+            @PathVariable Long lessonId,
+            @PathVariable Long materialId) {
+        try {
+            log.info("Generating streaming URL for material: {}", materialId);
+
+            // 학습자료 조회 및 권한 확인
+            LearningMaterial material = findMaterialWithValidation(materialId, lessonId, classroomId);
+
+            // 기존 generatePresignedUrl 메서드 사용
+            String streamingUrl = generatePresignedUrl(material.getFilePath(), "inline");
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("streamingUrl", streamingUrl);
+            response.put("fileName", material.getFileName());
+
+            log.info("Streaming URL generated successfully for material: {}", materialId);
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid streaming request: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                    Map.of("success", false, "error", e.getMessage())
+            );
+        } catch (Exception e) {
+            log.error("Failed to generate streaming URL for material: {}", materialId, e);
+            return ResponseEntity.internalServerError().body(
+                    Map.of("success", false, "error", "스트리밍 URL 생성에 실패했습니다.")
+            );
+        }
+    }
+
     /**
      * 학습자료 삭제
      */
@@ -269,6 +308,7 @@ public class LearningMaterialController {
         map.put("title", material.getTitle());
         map.put("fileName", material.getFileName());
         map.put("fileType", material.getFileType());
+        map.put("filePath", material.getFilePath());
         map.put("fileSize", material.getFileSize());
         map.put("formattedFileSize", material.getFormattedFileSize());
         map.put("uploadedAt", material.getUploadedAt().toString());
@@ -337,25 +377,32 @@ public class LearningMaterialController {
     private String generatePresignedUrl(String filePath, String disposition) {
         try {
             String s3Key = extractS3Key(filePath);
+            log.info("=== Pre-signed URL 생성 시작 ===");
+            log.info("S3 Key: {}", s3Key);
+            log.info("Bucket: {}", bucketName);
+            log.info("Region: {}", region);
 
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                     .bucket(bucketName)
                     .key(s3Key)
-                    .responseContentDisposition(disposition)
                     .build();
 
             GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofMinutes(15))
+                    .signatureDuration(Duration.ofMinutes(60))
                     .getObjectRequest(getObjectRequest)
                     .build();
 
-            // 수정: S3Config에서 주입받은 s3Presigner 사용
             PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
-            return presignedRequest.url().toString();
+            String url = presignedRequest.url().toString();
+
+            log.info("생성된 Pre-signed URL: {}", url);
+            log.info("=== Pre-signed URL 생성 완료 ===");
+
+            return url;
 
         } catch (Exception e) {
-            log.error("Failed to generate presigned URL for file: {}", filePath, e);
-            throw new RuntimeException("파일 URL 생성에 실패했습니다.");
+            log.error("Pre-signed URL 생성 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("Pre-signed URL 생성 실패: " + e.getMessage());
         }
     }
 

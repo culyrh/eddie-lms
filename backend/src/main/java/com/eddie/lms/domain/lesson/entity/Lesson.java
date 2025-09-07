@@ -38,6 +38,10 @@ public class Lesson {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "is_completed", nullable = false)
+    @Builder.Default
+    private Boolean isCompleted = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "lesson_type", nullable = false, length = 20)
     private LessonType lessonType;
@@ -49,6 +53,9 @@ public class Lesson {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "main_video_url")
+    private String mainVideoUrl;
 
     // 학습 자료와의 연관관계 (OneToMany)
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
@@ -135,5 +142,19 @@ public class Lesson {
      */
     public boolean isEmpty() {
         return materials.isEmpty();
+    }
+
+    /**
+     * 영상수업일 경우 추가 영상 업로드 제한
+      */
+    public void validateVideoUpload() {
+        if (this.lessonType == LessonType.VIDEO) {
+            long videoCount = materials.stream()
+                    .filter(m -> m.getFileType().startsWith("video/"))
+                    .count();
+            if (videoCount >= 1) {
+                throw new IllegalStateException("영상 수업은 하나의 영상만 업로드할 수 있습니다.");
+            }
+        }
     }
 }

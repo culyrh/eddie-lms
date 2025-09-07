@@ -175,8 +175,8 @@ const lessonService = {
   // 수업 진행률 업데이트
   updateLessonProgress: async (lessonId, progressData, token) => {
     try {
-      console.log(`📊 수업 진행률 업데이트: lessonId=${lessonId}`);
-      
+      console.log(`📊 수업 진도율 업데이트: lessonId=${lessonId}`);
+    
       const response = await fetch(`${API_BASE_URL}/lessons/${lessonId}/progress`, {
         method: 'PUT',
         headers: lessonService.getHeaders(token),
@@ -184,15 +184,134 @@ const lessonService = {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: 진행률을 업데이트할 수 없습니다.`);
+        throw new Error(`HTTP ${response.status}: 진도율을 업데이트할 수 없습니다.`);
       }
-      
+    
       const data = await response.json();
-      console.log('✅ 수업 진행률 업데이트 성공:', data);
+      console.log('✅ 수업 진도율 업데이트 성공:', data);
       return data;
-      
+    
     } catch (error) {
-      console.error('❌ 수업 진행률 업데이트 실패:', error);
+      console.error('❌ 수업 진도율 업데이트 실패:', error);
+      throw error;
+    }
+  },
+
+  // 사용자별 진도율 조회
+  getLessonProgress: async (lessonId, userId, token) => {
+    try {
+      console.log(`📈 진도율 조회: lessonId=${lessonId}, userId=${userId}`);
+    
+      const response = await fetch(`${API_BASE_URL}/lessons/${lessonId}/progress/${userId}`, {
+        method: 'GET',
+        headers: lessonService.getHeaders(token)
+      });
+    
+      if (!response.ok) {
+        if (response.status === 404) {
+          // 진도율 정보가 없는 경우 기본값 반환
+          return { 
+            completionPercentage: 0, 
+            lastAccessedTime: 0,
+            isCompleted: false 
+          };
+        }
+        throw new Error(`HTTP ${response.status}: 진도율을 조회할 수 없습니다.`);
+      }
+    
+      const data = await response.json();
+      console.log('✅ 진도율 조회 성공:', data);
+      return data;
+    
+    } catch (error) {
+      console.error('❌ 진도율 조회 실패:', error);
+      // 오류 시 기본값 반환
+      return { 
+        completionPercentage: 0, 
+        lastAccessedTime: 0,
+        isCompleted: false 
+      };
+    }
+  },
+
+  // 수업 완료 처리
+  markLessonAsCompleted: async (lessonId, userId, token) => {
+    try {
+      console.log(`🎯 수업 완료 처리: lessonId=${lessonId}, userId=${userId}`);
+    
+      const response = await fetch(`${API_BASE_URL}/lessons/${lessonId}/complete`, {
+        method: 'POST',
+        headers: lessonService.getHeaders(token),
+        body: JSON.stringify({ userId })
+      });
+    
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: 수업 완료 처리할 수 없습니다.`);
+      }
+    
+      const data = await response.json();
+      console.log('✅ 수업 완료 처리 성공:', data);
+      return data;
+    
+    } catch (error) {
+      console.error('❌ 수업 완료 처리 실패:', error);
+      throw error;
+    }
+  },
+
+  // 수업 통계 조회 (교육자용)
+  getLessonStatistics: async (classroomId, token) => {
+    try {
+      console.log(`📊 수업 통계 조회: classroomId=${classroomId}`);
+    
+      const response = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/lessons/statistics`, {
+        method: 'GET',
+        headers: lessonService.getHeaders(token)
+      });
+    
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: 수업 통계를 조회할 수 없습니다.`);
+      }
+    
+      const data = await response.json();
+      console.log('✅ 수업 통계 조회 성공:', data);
+      return data;
+    
+    } catch (error) {
+      console.error('❌ 수업 통계 조회 실패:', error);
+      throw error;
+    }
+  },
+
+  // 영상 파일 업로드 (학습 자료용)
+  uploadVideoFile: async (classroomId, lessonId, file, token) => {
+    try {
+      console.log(`🎬 영상 파일 업로드: lessonId=${lessonId}`);
+    
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', file.name);
+      formData.append('materialType', 'VIDEO');
+    
+      const response = await fetch(`${API_BASE_URL}/classrooms/${classroomId}/lessons/${lessonId}/materials`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // Content-Type은 FormData 사용시 자동 설정됨
+        },
+        body: formData
+      });
+    
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: 영상 파일을 업로드할 수 없습니다.`);
+      }
+    
+      const data = await response.json();
+      console.log('✅ 영상 파일 업로드 성공:', data);
+      return data;
+    
+    } catch (error) {
+      console.error('❌ 영상 파일 업로드 실패:', error);
       throw error;
     }
   },
