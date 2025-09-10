@@ -23,8 +23,9 @@ const VideoPlayer = ({
 }) => {
   const videoRef = useRef(null);
   const progressUpdateIntervalRef = useRef(null);
-  const totalWatchTimeRef = useRef(0); // 누적 재생 시간
-  const lastPlayTimeRef = useRef(0); // 마지막 재생 시점
+  // 서버와 동일한 방식으로 진도율 계산을 위해 totalWatchTimeRef 제거
+  // const totalWatchTimeRef = useRef(0); // 삭제됨
+  // const lastPlayTimeRef = useRef(0); // 삭제됨
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -37,79 +38,65 @@ const VideoPlayer = ({
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(initialProgress);
 
-  // 진도율 업데이트 함수
+  // 진도율 업데이트 함수 - 서버와 동일한 방식 (currentTime 기반)
   const updateProgress = useCallback(() => {
-    if (duration === 0) return;
+    if (duration === 0) return; // 비디오 길이가 0이면 계산 불가능하므로 종료
     
-    const newProgress = (totalWatchTimeRef.current / duration) * 100;
-    const finalProgress = Math.min(newProgress, 100);
+    // 서버와 동일한 방식: 현재 재생 위치 기반으로 진도율 계산
+    const newProgress = Math.min(100, (currentTime / duration) * 100);
     
-    setProgress(finalProgress);
+    // 화면에 표시될 진도율 업데이트
+    setProgress(newProgress);
     
+    // 부모 컴포넌트에 진도율 변경 알림
     if (onProgressUpdate) {
-      onProgressUpdate(finalProgress);
+      onProgressUpdate(newProgress);
     }
-  }, [duration, onProgressUpdate]);
+  }, [currentTime, duration, onProgressUpdate]);
 
   // 비디오 이벤트 핸들러
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
+    // 비디오 메타데이터 로드 시 처리
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
-      setLoading(false);
+      setDuration(video.duration); // 비디오 전체 길이 설정
+      setLoading(false); // 로딩 상태 해제
       
-      // 초기 진도율이 있으면 해당 위치로 이동하고 시청 시간 설정
+      // 초기 진도율이 있으면 해당 위치로 이동
       if (initialProgress > 0) {
         const startTime = (initialProgress / 100) * video.duration;
         video.currentTime = startTime;
         setCurrentTime(startTime);
-        // 초기 시청 시간을 영상 길이로 제한
-        totalWatchTimeRef.current = Math.min((initialProgress / 100) * video.duration, video.duration);
-
-        updateProgress();
+        // 진도율은 currentTime이 변경되면 자동으로 업데이트됨
       }
     };
 
+    // 비디오 시간 업데이트 처리
     const handleTimeUpdate = () => {
-      const newTime = video.currentTime;
-      setCurrentTime(newTime);
-      // 진도율 계산은 여기서 하지 않음
+      const newTime = video.currentTime; // 현재 비디오 재생 위치
+      setCurrentTime(newTime); // 현재 시간 상태 업데이트
+      // updateProgress는 currentTime이 변경될 때 useEffect에서 자동 호출됨
     };
 
+    // 비디오 재생 시작 처리
     const handlePlay = () => {
-      setIsPlaying(true);
-      lastPlayTimeRef.current = videoRef.current.currentTime;
+      setIsPlaying(true); // 재생 상태로 변경
     };
 
+    // 비디오 일시정지 처리
     const handlePause = () => {
-      setIsPlaying(false);
-    
-      // 재생된 시간만큼 누적 시청 시간에 추가
-      const currentVideoTime = videoRef.current.currentTime;
-      const playedDuration = currentVideoTime - lastPlayTimeRef.current;
-    
-      // 순차적으로 앞으로 재생된 경우만 시청 시간에 추가 (되감기 제외)
-      if (playedDuration > 0 && playedDuration <= 60) { // 최대 60초까지만 인정
-        totalWatchTimeRef.current += playedDuration;
-        console.log(`시청 시간 추가: ${playedDuration.toFixed(1)}s, 총: ${totalWatchTimeRef.current.toFixed(1)}s`);
-        
-        // 진도율 업데이트
-        updateProgress();
-      } else if (playedDuration <= 0) {
-        console.log('되감기 감지 - 시청 시간 추가 안함');
-      } else {
-        console.log('큰 점프 감지 - 시청 시간 추가 안함');
-      }
+      setIsPlaying(false); // 일시정지 상태로 변경
     };
 
+    // 볼륨 변경 처리
     const handleVolumeChange = () => {
       setVolume(video.volume);
       setIsMuted(video.muted);
     };
 
-    // 재생 속도 제한 (최대 2배속)
+    // 재생 속도 변경 처리 (최대 2배속으로 제한)
     const handleRateChange = () => {
       if (video.playbackRate > 2) {
         video.playbackRate = 2;
@@ -119,6 +106,7 @@ const VideoPlayer = ({
       }
     };
 
+    // 이벤트 리스너 등록
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
@@ -126,6 +114,7 @@ const VideoPlayer = ({
     video.addEventListener('volumechange', handleVolumeChange);
     video.addEventListener('ratechange', handleRateChange);
 
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -134,26 +123,32 @@ const VideoPlayer = ({
       video.removeEventListener('volumechange', handleVolumeChange);
       video.removeEventListener('ratechange', handleRateChange);
     };
-  }, [videoUrl, initialProgress, updateProgress]);
+  }, [videoUrl, initialProgress]);
+
+  // currentTime이 변경될 때마다 진도율 업데이트
+  useEffect(() => {
+    updateProgress();
+  }, [updateProgress]);
 
   // 진도율 자동 저장 (30초마다)
   useEffect(() => {
     if (isPlaying && lessonId && userId && token) {
       progressUpdateIntervalRef.current = setInterval(async () => {
         try {
+          // 서버에 현재 재생 위치 전송 (서버에서 진도율 계산)
           await progressTrackingService.updateProgress(
             lessonId, 
             userId, 
-            currentTime, 
+            currentTime, // 현재 재생 위치
             duration, 
             token
           );
           
-          console.log(`진도율 자동 저장: ${progress.toFixed(1)}%`);
+          console.log(`진도율 자동 저장: ${progress.toFixed(1)}% (currentTime: ${currentTime.toFixed(1)}s)`);
         } catch (error) {
           console.error('자동 진도율 저장 오류:', error);
         }
-      }, 30000);
+      }, 30000); // 30초마다 실행
 
       return () => {
         if (progressUpdateIntervalRef.current) {
@@ -163,37 +158,27 @@ const VideoPlayer = ({
     }
   }, [isPlaying, lessonId, userId, token, currentTime, duration, progress]);
 
-  // 컴포넌트 언마운트 시 진도율 저장
+  // 컴포넌트 언마운트 시 최종 진도율 저장
   useEffect(() => {
     return () => {
       if (progressUpdateIntervalRef.current) {
         clearInterval(progressUpdateIntervalRef.current);
       }
       
-      // 마지막 재생 세션의 시청 시간 추가
-      if (isPlaying && videoRef.current) {
-        const currentVideoTime = videoRef.current.currentTime;
-        const playedDuration = currentVideoTime - lastPlayTimeRef.current;
-        if (playedDuration > 0 && playedDuration <= 60) {
-          totalWatchTimeRef.current += playedDuration;
-          updateProgress();
-        }
-      }
-      
-      // 최종 진도율 저장
+      // 최종 진도율 저장 (현재 재생 위치 기반)
       if (lessonId && userId && token && currentTime > 0) {
         progressTrackingService.updateProgress(
           lessonId, 
           userId, 
-          currentTime,
+          currentTime, // 현재 재생 위치
           duration, 
           token
         ).catch(console.error);
       }
     };
-  }, [lessonId, userId, token, currentTime, duration, isPlaying, updateProgress]);
+  }, [lessonId, userId, token, currentTime, duration]);
 
-  // 마우스 비활성화 타이머
+  // 마우스 비활성화 타이머 (컨트롤 UI 자동 숨김)
   useEffect(() => {
     let hideControlsTimeout;
 
@@ -265,7 +250,7 @@ const VideoPlayer = ({
 
   const changePlaybackRate = (rate) => {
     const video = videoRef.current;
-    const limitedRate = Math.min(rate, 2);
+    const limitedRate = Math.min(rate, 2); // 최대 2배속으로 제한
     video.playbackRate = limitedRate;
     setPlaybackRate(limitedRate);
   };
@@ -273,13 +258,8 @@ const VideoPlayer = ({
   const handleSeek = (value) => {
     const video = videoRef.current;
     const seekTime = parseFloat(value);
-  
-    // 시킹 시에는 시청 시간 추가하지 않음 (pause/play에서만 처리)
-    if (isPlaying) {
-      lastPlayTimeRef.current = seekTime; // 위치만 업데이트
-    }
-  
-    video.currentTime = seekTime;
+    video.currentTime = seekTime; // 비디오 위치 이동
+    // currentTime 변경으로 handleTimeUpdate가 호출되어 자동으로 진도율 업데이트됨
   };
 
   const toggleFullscreen = () => {
@@ -332,7 +312,7 @@ const VideoPlayer = ({
         </div>
       )}
 
-      {/* 진도율 표시 */}
+      {/* 진도율 표시 - 서버와 동일한 방식으로 계산된 진도율 */}
       <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm">
         진도율: {Math.round(progress)}%
       </div>
