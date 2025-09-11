@@ -6,26 +6,26 @@ import {
   VolumeX, 
   SkipBack, 
   SkipForward, 
-  Settings, 
   Maximize, 
   Minimize
 } from 'lucide-react';
 import progressTrackingService from '../services/progressTrackingService';
 
-const VideoPlayer = ({ 
-  videoUrl, 
-  lessonId, 
-  userId, 
-  token,
-  onProgressUpdate,
-  initialProgress = 0,
-  autoPlay = false 
-}) => {
+// 유틸리티 함수들
+const formatTime = (time) => {
+  const minutes = Math.floor(time / 60);
+  const seconds = Math.floor(time % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const calculateProgress = (currentTime, duration) => {
+  if (duration === 0) return 0;
+  return Math.min(100, (currentTime / duration) * 100);
+};
+
+// 비디오 플레이어 훅
+const useVideoPlayer = (videoUrl, initialProgress = 0, autoPlay = false) => {
   const videoRef = useRef(null);
-  const progressUpdateIntervalRef = useRef(null);
-  // 서버와 동일한 방식으로 진도율 계산을 위해 totalWatchTimeRef 제거
-  // const totalWatchTimeRef = useRef(0); // 삭제됨
-  // const lastPlayTimeRef = useRef(0); // 삭제됨
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -33,70 +33,37 @@ const VideoPlayer = ({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [progress, setProgress] = useState(initialProgress);
 
-  // 진도율 업데이트 함수 - 서버와 동일한 방식 (currentTime 기반)
-  const updateProgress = useCallback(() => {
-    if (duration === 0) return; // 비디오 길이가 0이면 계산 불가능하므로 종료
-    
-    // 서버와 동일한 방식: 현재 재생 위치 기반으로 진도율 계산
-    const newProgress = Math.min(100, (currentTime / duration) * 100);
-    
-    // 화면에 표시될 진도율 업데이트
-    setProgress(newProgress);
-    
-    // 부모 컴포넌트에 진도율 변경 알림
-    if (onProgressUpdate) {
-      onProgressUpdate(newProgress);
-    }
-  }, [currentTime, duration, onProgressUpdate]);
-
-  // 비디오 이벤트 핸들러
-  useEffect(() => {
+  // 비디오 이벤트 설정
+  const setupVideoEvents = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // 비디오 메타데이터 로드 시 처리
     const handleLoadedMetadata = () => {
-      setDuration(video.duration); // 비디오 전체 길이 설정
-      setLoading(false); // 로딩 상태 해제
+      setDuration(video.duration);
+      setLoading(false);
       
-      // 초기 진도율이 있으면 해당 위치로 이동
       if (initialProgress > 0) {
         const startTime = (initialProgress / 100) * video.duration;
         video.currentTime = startTime;
         setCurrentTime(startTime);
-        // 진도율은 currentTime이 변경되면 자동으로 업데이트됨
       }
     };
 
-    // 비디오 시간 업데이트 처리
     const handleTimeUpdate = () => {
-      const newTime = video.currentTime; // 현재 비디오 재생 위치
-      setCurrentTime(newTime); // 현재 시간 상태 업데이트
-      // updateProgress는 currentTime이 변경될 때 useEffect에서 자동 호출됨
+      setCurrentTime(video.currentTime);
     };
 
-    // 비디오 재생 시작 처리
-    const handlePlay = () => {
-      setIsPlaying(true); // 재생 상태로 변경
-    };
-
-    // 비디오 일시정지 처리
-    const handlePause = () => {
-      setIsPlaying(false); // 일시정지 상태로 변경
-    };
-
-    // 볼륨 변경 처리
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    
     const handleVolumeChange = () => {
       setVolume(video.volume);
       setIsMuted(video.muted);
     };
 
-    // 재생 속도 변경 처리 (최대 2배속으로 제한)
     const handleRateChange = () => {
       if (video.playbackRate > 2) {
         video.playbackRate = 2;
@@ -106,7 +73,6 @@ const VideoPlayer = ({
       }
     };
 
-    // 이벤트 리스너 등록
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
@@ -114,7 +80,6 @@ const VideoPlayer = ({
     video.addEventListener('volumechange', handleVolumeChange);
     video.addEventListener('ratechange', handleRateChange);
 
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -123,94 +88,12 @@ const VideoPlayer = ({
       video.removeEventListener('volumechange', handleVolumeChange);
       video.removeEventListener('ratechange', handleRateChange);
     };
-  }, [videoUrl, initialProgress]);
+  }, [initialProgress]);
 
-  // currentTime이 변경될 때마다 진도율 업데이트
   useEffect(() => {
-    updateProgress();
-  }, [updateProgress]);
-
-  // 진도율 자동 저장 (30초마다)
-  useEffect(() => {
-    if (isPlaying && lessonId && userId && token) {
-      progressUpdateIntervalRef.current = setInterval(async () => {
-        try {
-          // 서버에 현재 재생 위치 전송 (서버에서 진도율 계산)
-          await progressTrackingService.updateProgress(
-            lessonId, 
-            userId, 
-            currentTime, // 현재 재생 위치
-            duration, 
-            token
-          );
-          
-          console.log(`진도율 자동 저장: ${progress.toFixed(1)}% (currentTime: ${currentTime.toFixed(1)}s)`);
-        } catch (error) {
-          console.error('자동 진도율 저장 오류:', error);
-        }
-      }, 30000); // 30초마다 실행
-
-      return () => {
-        if (progressUpdateIntervalRef.current) {
-          clearInterval(progressUpdateIntervalRef.current);
-        }
-      };
-    }
-  }, [isPlaying, lessonId, userId, token, currentTime, duration, progress]);
-
-  // 컴포넌트 언마운트 시 최종 진도율 저장
-  useEffect(() => {
-    return () => {
-      if (progressUpdateIntervalRef.current) {
-        clearInterval(progressUpdateIntervalRef.current);
-      }
-      
-      // 최종 진도율 저장 (현재 재생 위치 기반)
-      if (lessonId && userId && token && currentTime > 0) {
-        progressTrackingService.updateProgress(
-          lessonId, 
-          userId, 
-          currentTime, // 현재 재생 위치
-          duration, 
-          token
-        ).catch(console.error);
-      }
-    };
-  }, [lessonId, userId, token, currentTime, duration]);
-
-  // 마우스 비활성화 타이머 (컨트롤 UI 자동 숨김)
-  useEffect(() => {
-    let hideControlsTimeout;
-
-    const showControlsTemporarily = () => {
-      setShowControls(true);
-      clearTimeout(hideControlsTimeout);
-      hideControlsTimeout = setTimeout(() => {
-        if (isPlaying) {
-          setShowControls(false);
-        }
-      }, 3000);
-    };
-
-    const handleMouseMove = () => {
-      showControlsTemporarily();
-    };
-
-    const handleMouseLeave = () => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseleave', handleMouseLeave);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseleave', handleMouseLeave);
-      clearTimeout(hideControlsTimeout);
-    };
-  }, [isPlaying]);
+    const cleanup = setupVideoEvents();
+    return cleanup;
+  }, [videoUrl, setupVideoEvents]);
 
   // 컨트롤 함수들
   const togglePlayPause = () => {
@@ -222,9 +105,8 @@ const VideoPlayer = ({
     }
   };
 
-  const handleVolumeChange = (e) => {
+  const changeVolume = (newVolume) => {
     const video = videoRef.current;
-    const newVolume = parseFloat(e.target.value);
     video.volume = newVolume;
     setVolume(newVolume);
     setIsMuted(newVolume === 0);
@@ -250,16 +132,14 @@ const VideoPlayer = ({
 
   const changePlaybackRate = (rate) => {
     const video = videoRef.current;
-    const limitedRate = Math.min(rate, 2); // 최대 2배속으로 제한
+    const limitedRate = Math.min(rate, 2);
     video.playbackRate = limitedRate;
     setPlaybackRate(limitedRate);
   };
 
-  const handleSeek = (value) => {
+  const seekTo = (time) => {
     const video = videoRef.current;
-    const seekTime = parseFloat(value);
-    video.currentTime = seekTime; // 비디오 위치 이동
-    // currentTime 변경으로 handleTimeUpdate가 호출되어 자동으로 진도율 업데이트됨
+    video.currentTime = parseFloat(time);
   };
 
   const toggleFullscreen = () => {
@@ -272,141 +152,384 @@ const VideoPlayer = ({
     }
   };
 
-  const formatTime = (time) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  return {
+    videoRef,
+    isPlaying,
+    currentTime,
+    duration,
+    volume,
+    isMuted,
+    playbackRate,
+    isFullscreen,
+    loading,
+    togglePlayPause,
+    changeVolume,
+    toggleMute,
+    skipBackward,
+    skipForward,
+    changePlaybackRate,
+    seekTo,
+    toggleFullscreen
+  };
+};
+
+// 진도율 관리 훅
+const useProgressTracking = (
+  videoRef, 
+  currentTime, 
+  duration, 
+  isPlaying, 
+  lessonId, 
+  userId, 
+  token, 
+  onProgressUpdate
+) => {
+  const [progress, setProgress] = useState(0);
+  const progressUpdateIntervalRef = useRef(null);
+  const completionRequestRef = useRef(false); // 완료 요청 중복 방지
+  const lastProgressRef = useRef(0); // 이전 진도율 저장
+
+  const updateProgress = useCallback(() => {
+    if (!videoRef.current || duration === 0) return;
+    
+    const newProgress = calculateProgress(currentTime, duration);
+    setProgress(newProgress);
+    
+    // 진도율이 실제로 변경되었을 때만 부모에 알림 (1% 이상 차이)
+    if (Math.abs(newProgress - lastProgressRef.current) >= 1) {
+      lastProgressRef.current = newProgress;
+      
+      // 90% 이상이고 아직 완료 요청을 하지 않았을 때만 onProgressUpdate 호출
+      if (newProgress >= 90 && !completionRequestRef.current) {
+        completionRequestRef.current = true;
+        if (onProgressUpdate) {
+          onProgressUpdate(newProgress);
+        }
+        
+        // 5초 후 다시 완료 요청 가능하도록 (실패 시 재시도용)
+        setTimeout(() => {
+          completionRequestRef.current = false;
+        }, 5000);
+      } else if (newProgress < 90 && onProgressUpdate) {
+        // 90% 미만일 때는 정상적으로 진도율만 업데이트
+        onProgressUpdate(newProgress);
+      }
+    }
+  }, [videoRef, currentTime, duration, onProgressUpdate]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      updateProgress();
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentTime, updateProgress]);
+
+  useEffect(() => {
+    if (isPlaying && lessonId && userId && token) {
+      progressUpdateIntervalRef.current = setInterval(async () => {
+        try {
+          const video = videoRef.current;
+          if (video) {
+            await progressTrackingService.updateProgress(
+              lessonId, 
+              userId, 
+              video.currentTime,
+              video.duration, 
+              token
+            );
+            
+            console.log(`진도율 자동 저장: ${calculateProgress(video.currentTime, video.duration).toFixed(1)}%`);
+          }
+        } catch (error) {
+          console.error('자동 진도율 저장 오류:', error);
+        }
+      }, 30000);
+
+      return () => {
+        if (progressUpdateIntervalRef.current) {
+          clearInterval(progressUpdateIntervalRef.current);
+        }
+      };
+    }
+  }, [isPlaying, lessonId, userId, token, videoRef]);
+
+  useEffect(() => {
+    return () => {
+      if (progressUpdateIntervalRef.current) {
+        clearInterval(progressUpdateIntervalRef.current);
+      }
+      
+      if (lessonId && userId && token && videoRef.current) {
+        const video = videoRef.current;
+        if (video.currentTime > 0) {
+          progressTrackingService.updateProgress(
+            lessonId, 
+            userId, 
+            video.currentTime,
+            video.duration, 
+            token
+          ).catch(console.error);
+        }
+      }
+    };
+  }, [lessonId, userId, token, videoRef]);
+
+  return { progress };
+};
+
+// 컨트롤 UI 관리 훅
+const useVideoControls = (isPlaying) => {
+  const [showControls, setShowControls] = useState(true);
+  const isPlayingRef = useRef(false);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    let hideControlsTimeout;
+
+    const showControlsTemporarily = () => {
+      setShowControls(true);
+      clearTimeout(hideControlsTimeout);
+      hideControlsTimeout = setTimeout(() => {
+        if (isPlayingRef.current) {
+          setShowControls(false);
+        }
+      }, 3000);
+    };
+
+    const handleMouseMove = () => {
+      showControlsTemporarily();
+    };
+
+    const handleMouseLeave = () => {
+      if (isPlayingRef.current) {
+        setShowControls(false);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      clearTimeout(hideControlsTimeout);
+    };
+  }, []);
+
+  return { showControls };
+};
+
+// 컴포넌트들
+const LoadingSpinner = () => (
+  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+  </div>
+);
+
+const PlayButton = ({ onClick }) => (
+  <div className="absolute inset-0 flex items-center justify-center">
+    <button
+      onClick={onClick}
+      className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full p-4 transition-all duration-200"
+    >
+      <Play className="h-12 w-12 text-white ml-1" />
+    </button>
+  </div>
+);
+
+const ProgressDisplay = ({ progress }) => (
+  <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm">
+    진도율: {Math.round(progress)}%
+  </div>
+);
+
+const VideoControls = ({
+  isPlaying,
+  currentTime,
+  duration,
+  volume,
+  isMuted,
+  playbackRate,
+  isFullscreen,
+  showControls,
+  onTogglePlayPause,
+  onVolumeChange,
+  onToggleMute,
+  onSkipBackward,
+  onSkipForward,
+  onPlaybackRateChange,
+  onSeek,
+  onToggleFullscreen
+}) => {
+  const handleVolumeChange = (e) => {
+    onVolumeChange(parseFloat(e.target.value));
+  };
+
+  const handlePlaybackRateChange = (e) => {
+    onPlaybackRateChange(parseFloat(e.target.value));
+  };
+
+  const handleSeek = (e) => {
+    onSeek(e.target.value);
   };
 
   return (
+    <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent p-4 transition-opacity duration-300 ${
+      showControls ? 'opacity-100' : 'opacity-0'
+    }`}>
+      <div className="mb-4">
+        <input
+          type="range"
+          min="0"
+          max={duration}
+          value={currentTime}
+          onChange={handleSeek}
+          className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+          style={{
+            background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
+          }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onTogglePlayPause}
+            className="text-white hover:text-blue-400 transition-colors duration-200"
+          >
+            {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+          </button>
+
+          <button
+            onClick={onSkipBackward}
+            className="text-white hover:text-blue-400 transition-colors duration-200"
+          >
+            <SkipBack className="h-5 w-5" />
+          </button>
+
+          <button
+            onClick={onSkipForward}
+            className="text-white hover:text-blue-400 transition-colors duration-200"
+          >
+            <SkipForward className="h-5 w-5" />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onToggleMute}
+              className="text-white hover:text-blue-400 transition-colors duration-200"
+            >
+              {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={isMuted ? 0 : volume}
+              onChange={handleVolumeChange}
+              className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <span className="text-white text-sm">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <select
+            value={playbackRate}
+            onChange={handlePlaybackRateChange}
+            className="bg-gray-800 text-white text-sm rounded px-2 py-1"
+          >
+            <option value={0.5}>0.5x</option>
+            <option value={0.75}>0.75x</option>
+            <option value={1}>1x</option>
+            <option value={1.25}>1.25x</option>
+            <option value={1.5}>1.5x</option>
+            <option value={2}>2x</option>
+          </select>
+
+          <button
+            onClick={onToggleFullscreen}
+            className="text-white hover:text-blue-400 transition-colors duration-200"
+          >
+            {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 메인 VideoPlayer 컴포넌트
+const VideoPlayer = ({ 
+  videoUrl, 
+  lessonId, 
+  userId, 
+  token,
+  onProgressUpdate,
+  initialProgress = 0,
+  autoPlay = false 
+}) => {
+  const videoPlayer = useVideoPlayer(videoUrl, initialProgress, autoPlay);
+  const { showControls } = useVideoControls(videoPlayer.isPlaying);
+  const { progress } = useProgressTracking(
+    videoPlayer.videoRef,
+    videoPlayer.currentTime,
+    videoPlayer.duration,
+    videoPlayer.isPlaying,
+    lessonId,
+    userId,
+    token,
+    onProgressUpdate
+  );
+
+  return (
     <div className="relative bg-black rounded-lg overflow-hidden group">
-      {/* 비디오 엘리먼트 */}
       <video
-        ref={videoRef}
+        ref={videoPlayer.videoRef}
         src={videoUrl}
         className="w-full h-auto max-h-[70vh]"
         autoPlay={autoPlay}
-        onClick={togglePlayPause}
-        onDoubleClick={toggleFullscreen}
+        onClick={videoPlayer.togglePlayPause}
+        onDoubleClick={videoPlayer.toggleFullscreen}
         controlsList="nodownload nofullscreen noremoteplayback"
         disablePictureInPicture
         onContextMenu={(e) => e.preventDefault()}
       />
 
-      {/* 로딩 스피너 */}
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-        </div>
+      {videoPlayer.loading && <LoadingSpinner />}
+
+      {!videoPlayer.isPlaying && !videoPlayer.loading && (
+        <PlayButton onClick={videoPlayer.togglePlayPause} />
       )}
 
-      {/* 중앙 재생 버튼 */}
-      {!isPlaying && !loading && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <button
-            onClick={togglePlayPause}
-            className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full p-4 transition-all duration-200"
-          >
-            <Play className="h-12 w-12 text-white ml-1" />
-          </button>
-        </div>
-      )}
+      <ProgressDisplay progress={progress} />
 
-      {/* 진도율 표시 - 서버와 동일한 방식으로 계산된 진도율 */}
-      <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm">
-        진도율: {Math.round(progress)}%
-      </div>
-
-      {/* 컨트롤 바 */}
-      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent p-4 transition-opacity duration-300 ${
-        showControls ? 'opacity-100' : 'opacity-0'
-      }`}>
-        {/* 진행률 바 */}
-        <div className="mb-4">
-          <input
-            type="range"
-            min="0"
-            max={duration}
-            value={currentTime}
-            onChange={(e) => handleSeek(e.target.value)}
-            className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-            style={{
-              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
-            }}
-          />
-        </div>
-
-        {/* 컨트롤 버튼들 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={togglePlayPause}
-              className="text-white hover:text-blue-400 transition-colors duration-200"
-            >
-              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
-            </button>
-
-            <button
-              onClick={skipBackward}
-              className="text-white hover:text-blue-400 transition-colors duration-200"
-            >
-              <SkipBack className="h-5 w-5" />
-            </button>
-
-            <button
-              onClick={skipForward}
-              className="text-white hover:text-blue-400 transition-colors duration-200"
-            >
-              <SkipForward className="h-5 w-5" />
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={toggleMute}
-                className="text-white hover:text-blue-400 transition-colors duration-200"
-              >
-                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-
-            <span className="text-white text-sm">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* 재생 속도 (최대 2배속) */}
-            <select
-              value={playbackRate}
-              onChange={(e) => changePlaybackRate(parseFloat(e.target.value))}
-              className="bg-gray-800 text-white text-sm rounded px-2 py-1"
-            >
-              <option value={0.5}>0.5x</option>
-              <option value={0.75}>0.75x</option>
-              <option value={1}>1x</option>
-              <option value={1.25}>1.25x</option>
-              <option value={1.5}>1.5x</option>
-              <option value={2}>2x</option>
-            </select>
-
-            <button
-              onClick={toggleFullscreen}
-              className="text-white hover:text-blue-400 transition-colors duration-200"
-            >
-              {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-      </div>
+      <VideoControls
+        isPlaying={videoPlayer.isPlaying}
+        currentTime={videoPlayer.currentTime}
+        duration={videoPlayer.duration}
+        volume={videoPlayer.volume}
+        isMuted={videoPlayer.isMuted}
+        playbackRate={videoPlayer.playbackRate}
+        isFullscreen={videoPlayer.isFullscreen}
+        showControls={showControls}
+        onTogglePlayPause={videoPlayer.togglePlayPause}
+        onVolumeChange={videoPlayer.changeVolume}
+        onToggleMute={videoPlayer.toggleMute}
+        onSkipBackward={videoPlayer.skipBackward}
+        onSkipForward={videoPlayer.skipForward}
+        onPlaybackRateChange={videoPlayer.changePlaybackRate}
+        onSeek={videoPlayer.seekTo}
+        onToggleFullscreen={videoPlayer.toggleFullscreen}
+      />
     </div>
   );
 };

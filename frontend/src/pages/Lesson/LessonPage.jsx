@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BookOpen, Clock, Users, Plus, FileText, Video, Edit, Eye, Download, Upload, X, CheckCircle, Play } from 'lucide-react';
 import LessonForm from './LessonForm';
 import lessonService from '../../services/lessonService';
@@ -23,7 +23,16 @@ const LessonPage = ({ classroomId, currentUser, accessToken }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [userProgress, setUserProgress] = useState({});
-  const [videoUrl, setVideoUrl] = useState(null);
+  const [videoUrl, setVideoUrl] = useState(null);  
+  const currentVideoUrlRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (currentVideoUrlRef.current && currentVideoUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(currentVideoUrlRef.current);
+      }
+    };
+  }, []);
 
   // 진도율 관련 유틸리티 함수들
   const getLessonProgress = (lessonId) => {
@@ -55,6 +64,11 @@ const LessonPage = ({ classroomId, currentUser, accessToken }) => {
 
   // 영상 URL 설정 useEffect (하나로 통합)
   useEffect(() => {
+    if (currentVideoUrlRef.current && currentVideoUrlRef.current.startsWith('blob:')) {
+      URL.revokeObjectURL(currentVideoUrlRef.current);
+      currentVideoUrlRef.current = null;
+    }
+
     setVideoUrl(null);
 
     // 모든 조건을 한번에 체크하여 불필요한 로그 방지
@@ -82,6 +96,7 @@ const LessonPage = ({ classroomId, currentUser, accessToken }) => {
       .then(data => {
         if (data.success) {
           setVideoUrl(data.streamingUrl);
+          currentVideoUrlRef.current = data.streamingUrl;
           console.log('영상 URL 설정 완료:', data.streamingUrl.substring(0, 100) + '...');
         }
       })

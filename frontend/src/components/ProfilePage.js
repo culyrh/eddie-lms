@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Save, User, Mail, Calendar, Shield, Upload, X } from 'lucide-react';
 
 const ProfilePage = ({ user, onUpdateProfile, onClose }) => {
@@ -7,7 +7,14 @@ const ProfilePage = ({ user, onUpdateProfile, onClose }) => {
     name: user?.name || '',
     profileImageUrl: user?.profileImageUrl || ''
   });
-  const [previewImage, setPreviewImage] = useState(user?.profileImageUrl || '');
+  
+  // blob URL이 아닌 안전한 이미지 URL 사용
+  const getSafeImageUrl = (url) => {
+    if (!url || url.startsWith('blob:')) return '';
+    return url;
+  };
+  
+  const [previewImage, setPreviewImage] = useState(getSafeImageUrl(user?.profileImageUrl));
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState({});
   const fileInputRef = useRef(null);
@@ -24,7 +31,7 @@ const ProfilePage = ({ user, onUpdateProfile, onClose }) => {
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   };
 
-const defaultProfileImage = getDefaultProfileImage(user?.name);
+  const defaultProfileImage = getDefaultProfileImage(user?.name);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -33,7 +40,6 @@ const defaultProfileImage = getDefaultProfileImage(user?.name);
       [name]: value
     }));
     
-    // 에러 초기화
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -61,18 +67,32 @@ const defaultProfileImage = getDefaultProfileImage(user?.name);
     setIsUploading(true);
 
     try {
-      // 실제 구현에서는 여기서 파일을 서버에 업로드
-      // const formData = new FormData();
-      // formData.append('file', file);
-      // const response = await uploadApi.uploadProfileImage(formData);
+      // 실제 서버에 파일 업로드
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
       
-      // 미리보기용 로컬 URL 생성
-      const localUrl = URL.createObjectURL(file);
-      setPreviewImage(localUrl);
+      const response = await fetch('/api/upload/profile-image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: uploadFormData
+      });
+      
+      if (!response.ok) {
+        throw new Error('파일 업로드 실패');
+      }
+      
+      const result = await response.json();
+      const serverImageUrl = result.fileUrl;
+      
+      // 서버에서 받은 실제 URL 사용
+      setPreviewImage(serverImageUrl);
       setFormData(prev => ({
         ...prev,
-        profileImageUrl: localUrl // 실제로는 서버에서 받은 URL
+        profileImageUrl: serverImageUrl
       }));
+      
     } catch (error) {
       console.error('이미지 업로드 실패:', error);
       alert('이미지 업로드에 실패했습니다.');
@@ -113,9 +133,9 @@ const defaultProfileImage = getDefaultProfileImage(user?.name);
   const handleCancel = () => {
     setFormData({
       name: user?.name || '',
-      profileImageUrl: user?.profileImageUrl || ''
+      profileImageUrl: getSafeImageUrl(user?.profileImageUrl)
     });
-    setPreviewImage(user?.profileImageUrl || '');
+    setPreviewImage(getSafeImageUrl(user?.profileImageUrl));
     setErrors({});
     setIsEditing(false);
   };
@@ -135,6 +155,15 @@ const defaultProfileImage = getDefaultProfileImage(user?.name);
 
   const getUserTypeName = (userType) => {
     return userType === 'EDUCATOR' ? '교육자' : '학습자';
+  };
+
+  // 안전한 프로필 이미지 URL 가져오기
+  const getDisplayImageUrl = () => {
+    if (previewImage && !previewImage.startsWith('blob:')) {
+      return previewImage;
+    }
+    const safeUserImage = getSafeImageUrl(user?.profileImageUrl);
+    return safeUserImage || defaultProfileImage;
   };
 
   return (
@@ -159,7 +188,7 @@ const defaultProfileImage = getDefaultProfileImage(user?.name);
                 {/* 프로필 이미지 */}
                 <div className="relative inline-block mb-4">
                   <img
-                    src={previewImage || user?.profileImageUrl || defaultProfileImage}
+                    src={getDisplayImageUrl()}
                     alt="프로필"
                     className="w-32 h-32 rounded-full object-cover border-4 border-gray-200"
                     onError={(e) => {
