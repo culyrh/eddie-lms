@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================ */
+/* 퀴즈 보안 모드 스타일 */
+/* ============================================ */
+
 /* 퀴즈 모니터링 중일 때 적용되는 보안 스타일 */
 .quiz-security-mode {
   /* 텍스트 선택 방지 */
@@ -137,8 +141,9 @@
   50% { background-color: rgba(220, 38, 38, 0.1); }
 }
 
-
-/* 비디오 플레이어 관련 스타일 */
+/* ============================================ */
+/* 비디오 플레이어 스타일 */
+/* ============================================ */
 
 /* 비디오 플레이어 컨테이너 */
 .video-player-container {
@@ -298,7 +303,149 @@
   }
 }
 
+/* ============================================ */
+/* CSS 변수 정의 (EDDIE 디자인 시스템) */
+/* ============================================ */
+
+:root {
+  /* Primary Brand Colors */
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-800: #1e40af;
+  --primary-900: #1e3a8a;
+
+  /* Neutral Colors */
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
+
+  /* Success, Warning, Error */
+  --success-50: #ecfdf5;
+  --success-500: #10b981;
+  --success-600: #059669;
+  --warning-50: #fffbeb;
+  --warning-500: #f59e0b;
+  --error-50: #fef2f2;
+  --error-500: #ef4444;
+
+  /* 폰트 크기 */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  /* 스페이싱 */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* 보더 반지름 */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+
+  /* 그림자 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* ============================================ */
+/* 기존 Tailwind 클래스들을 새 색상으로 오버라이드 */
+/* ============================================ */
+
+.bg-gray-50 { background-color: var(--neutral-50) !important; }
+.bg-gray-100 { background-color: var(--neutral-100) !important; }
+.bg-gray-200 { background-color: var(--neutral-200) !important; }
+.bg-gray-300 { background-color: var(--neutral-300) !important; }
+
+.text-gray-900 { color: var(--neutral-800) !important; }
+.text-gray-800 { color: var(--neutral-700) !important; }
+.text-gray-700 { color: var(--neutral-700) !important; }
+.text-gray-600 { color: var(--neutral-600) !important; }
+.text-gray-500 { color: var(--neutral-500) !important; }
+.text-gray-400 { color: var(--neutral-400) !important; }
+
+.border-gray-200 { border-color: var(--neutral-200) !important; }
+.border-gray-300 { border-color: var(--neutral-300) !important; }
+
+.bg-blue-500 { background-color: var(--primary-500) !important; }
+.bg-blue-600 { background-color: var(--primary-600) !important; }
+.bg-blue-50 { background-color: var(--primary-50) !important; }
+.text-blue-600 { color: var(--primary-600) !important; }
+.text-blue-500 { color: var(--primary-500) !important; }
+.border-blue-500 { border-color: var(--primary-500) !important; }
+
+.bg-green-500 { background-color: var(--success-500) !important; }
+.bg-green-600 { background-color: var(--success-600) !important; }
+.text-green-600 { color: var(--success-600) !important; }
+
+.bg-red-500 { background-color: var(--error-500) !important; }
+.bg-red-600 { background-color: var(--error-600) !important; }
+.text-red-600 { color: var(--error-600) !important; }
+
+.bg-yellow-500 { background-color: var(--warning-500) !important; }
+.bg-yellow-600 { background-color: var(--warning-600) !important; }
+.text-yellow-600 { color: var(--warning-600) !important; }
+
+/* ============================================ */
+/* 커스텀 버튼 클래스 */
+/* ============================================ */
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  color: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+/* ============================================ */
 /* 반응형 디자인 */
+/* ============================================ */
+
 @media (max-width: 768px) {
   .video-controls {
     padding: 12px;
@@ -314,7 +461,10 @@
   }
 }
 
+/* ============================================ */
 /* 다크 모드 지원 */
+/* ============================================ */
+
 @media (prefers-color-scheme: dark) {
   .lesson-progress-bar {
     background: #374151;
