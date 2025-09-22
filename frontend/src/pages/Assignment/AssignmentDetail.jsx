@@ -9,7 +9,7 @@ const AssignmentDetail = ({
   assignment, 
   currentUser, 
   classroomId, 
-  accessToken,   // 토큰 추가
+  accessToken,
   onBack, 
   onEdit, 
   onDelete 
@@ -21,7 +21,6 @@ const AssignmentDetail = ({
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 학습자인 경우 내 제출물 로드 (토큰 사용)
   useEffect(() => {
     if (currentUser.userType === 'LEARNER' && accessToken) {
       loadMySubmission();
@@ -34,7 +33,7 @@ const AssignmentDetail = ({
         classroomId,
         assignment.assignmentId,
         currentUser.userId,
-        accessToken   // 토큰 추가
+        accessToken
       );
       setMySubmission(submission);
     } catch (error) {
@@ -58,13 +57,13 @@ const AssignmentDetail = ({
     const diffTime = dueDate - now;
 
     if (diffTime < 0) {
-      return { text: '마감됨', color: 'text-red-600', bgColor: 'bg-red-50' };
+      return { text: '마감됨', color: 'text-red-600', bgColor: 'bg-red-100' };
     } else {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       if (diffDays === 0) {
-        return { text: '오늘 마감', color: 'text-orange-600', bgColor: 'bg-orange-50' };
+        return { text: '오늘 마감', color: 'text-orange-600', bgColor: 'bg-orange-100' };
       } else {
-        return { text: `${diffDays}일 남음`, color: 'text-green-600', bgColor: 'bg-green-50' };
+        return { text: `${diffDays}일 남음`, color: 'text-green-600', bgColor: 'bg-green-100' };
       }
     }
   };
@@ -72,27 +71,23 @@ const AssignmentDetail = ({
   const handleSubmitAssignment = async (formData) => {
     try {
       setIsLoading(true);
-      
       if (mySubmission) {
-        // 재제출
         await assignmentService.resubmitAssignment(
           classroomId,
           assignment.assignmentId,
           currentUser.userId,
           formData,
-          accessToken   // 토큰 추가
+          accessToken
         );
       } else {
-        // 신규 제출
         await assignmentService.submitAssignment(
           classroomId,
           assignment.assignmentId,
           currentUser.userId,
           formData,
-          accessToken   // 토큰 추가
+          accessToken
         );
       }
-      
       await loadMySubmission();
       setShowSubmissionForm(false);
     } catch (error) {
@@ -106,22 +101,19 @@ const AssignmentDetail = ({
   const handleGradeSubmission = async (gradeData) => {
     try {
       setIsLoading(true);
-      
       await assignmentService.gradeSubmission(
         classroomId,
         assignment.assignmentId,
         selectedSubmission.submissionId,
         currentUser.userId,
         gradeData,
-        accessToken   //  토큰 추가
+        accessToken
       );
-      
-      // 과제 데이터 새로고침
       const updatedAssignment = await assignmentService.getAssignment(
         classroomId,
         assignment.assignmentId,
         currentUser.userId,
-        accessToken   //  토큰 추가
+        accessToken
       );
       setAssignmentData(updatedAssignment);
       setShowGradingPanel(false);
@@ -142,7 +134,6 @@ const AssignmentDetail = ({
 
   const dueDateStatus = getDueDateStatus();
 
-  // 과제 제출 폼 화면
   if (showSubmissionForm) {
     return (
       <SubmissionForm
@@ -156,28 +147,28 @@ const AssignmentDetail = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
+          className="flex items-center space-x-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={18} />
           <span>과제 목록으로</span>
         </button>
-        
+
         {currentUser.userType === 'EDUCATOR' && currentUser.userId === assignment.creatorId && (
           <div className="flex space-x-2">
             <button
               onClick={() => onEdit(assignment)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition"
             >
               <Edit2 size={18} />
             </button>
             <button
               onClick={handleDeleteAssignment}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition"
             >
               <Trash2 size={18} />
             </button>
@@ -185,8 +176,8 @@ const AssignmentDetail = ({
         )}
       </div>
 
-      {/* 과제 정보 */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      {/* 과제 카드 */}
+      <div className="bg-white border rounded-xl shadow-sm p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">{assignment.title}</h1>
@@ -201,50 +192,38 @@ const AssignmentDetail = ({
               </div>
             </div>
           </div>
-          
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${dueDateStatus.bgColor} ${dueDateStatus.color}`}>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${dueDateStatus.bgColor} ${dueDateStatus.color}`}>
             {dueDateStatus.text}
-          </div>
+          </span>
         </div>
 
-        <div className="prose max-w-none mb-6">
-          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-            {assignment.description}
-          </p>
-        </div>
+        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap mb-6">
+          {assignment.description}
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-1">
-              <Clock size={16} className="text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">마감일</span>
-            </div>
+          <div className="bg-blue-50 border rounded-lg p-4">
+            <Clock size={16} className="text-blue-600 mb-1" />
+            <p className="text-sm font-medium text-blue-900">마감일</p>
             <p className="text-blue-800">{formatDate(assignment.dueDate)}</p>
           </div>
-          
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-1">
-              <FileText size={16} className="text-green-600" />
-              <span className="text-sm font-medium text-green-900">만점</span>
-            </div>
+
+          <div className="bg-green-50 border rounded-lg p-4">
+            <FileText size={16} className="text-green-600 mb-1" />
+            <p className="text-sm font-medium text-green-900">만점</p>
             <p className="text-green-800">{assignment.maxScore}점</p>
           </div>
-          
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-1">
-              <Users size={16} className="text-purple-600" />
-              <span className="text-sm font-medium text-purple-900">제출 현황</span>
-            </div>
+
+          <div className="bg-purple-50 border rounded-lg p-4">
+            <Users size={16} className="text-purple-600 mb-1" />
+            <p className="text-sm font-medium text-purple-900">제출 현황</p>
             <p className="text-purple-800">{assignment.submissionCount || 0}명 제출</p>
           </div>
 
-          {/* 학습자인 경우 내 점수 표시 */}
-          {currentUser.userType === 'LEARNER' && mySubmission && mySubmission.isGraded && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-center space-x-2 mb-1">
-                <Star size={16} className="text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-900">내 점수</span>
-              </div>
+          {currentUser.userType === 'LEARNER' && mySubmission?.isGraded && (
+            <div className="bg-yellow-50 border rounded-lg p-4">
+              <Star size={16} className="text-yellow-600 mb-1" />
+              <p className="text-sm font-medium text-yellow-900">내 점수</p>
               <p className="text-yellow-800 font-bold">
                 {mySubmission.score}점 / {assignment.maxScore}점
               </p>
@@ -253,162 +232,117 @@ const AssignmentDetail = ({
         </div>
       </div>
 
-      {/* 학습자: 내 제출물 상태 (대폭 개선) */}
+      {/* 학습자 제출 현황 */}
       {currentUser.userType === 'LEARNER' && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-6">내 제출 현황</h3>
-          
+        <div className="bg-white border rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">내 제출 현황</h3>
           {mySubmission ? (
             <div className="space-y-6">
-              {/* 제출 상태 헤더 */}
-              <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+              {/* 제출 완료 카드 */}
+              <div className="flex items-center justify-between p-4 bg-green-50 border rounded-lg">
                 <div className="flex items-center space-x-3">
-                  <CheckCircle size={24} className="text-green-500" />
+                  <CheckCircle size={22} className="text-green-500" />
                   <div>
                     <p className="font-medium text-green-700">제출 완료</p>
                     <p className="text-sm text-green-600">
-                      {formatDate(mySubmission.submittedAt)}에 제출
+                      {formatDate(mySubmission.submittedAt)}
                       {mySubmission.isLate && (
-                        <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded">지각 제출</span>
+                        <span className="ml-2 px-2 py-1 bg-red-100 text-red-600 text-xs rounded">지각</span>
                       )}
                     </p>
                   </div>
                 </div>
-                
                 {!assignment.isOverdue && (
                   <button
                     onClick={() => setShowSubmissionForm(true)}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg shadow hover:opacity-90 transition"
                   >
                     재제출하기
                   </button>
                 )}
               </div>
 
-              {/* 제출한 내용 표시 */}
+              {/* 제출한 답안/파일 */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">제출한 내용</h4>
-                
+                <h4 className="font-medium text-gray-900 mb-3">제출한 내용</h4>
                 {mySubmission.submissionText && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-                    <h5 className="text-sm font-medium text-gray-700 mb-2">텍스트 답안</h5>
-                    <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                      {mySubmission.submissionText}
-                    </div>
+                  <div className="bg-gray-50 border rounded-lg p-4 mb-4">
+                    <p className="text-sm text-gray-700 font-medium mb-2">텍스트 답안</p>
+                    <p className="text-gray-800 whitespace-pre-wrap">{mySubmission.submissionText}</p>
                   </div>
                 )}
-
                 {mySubmission.fileUrl && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <h5 className="text-sm font-medium text-gray-700 mb-2">첨부파일</h5>
+                  <div className="bg-gray-50 border rounded-lg p-4">
+                    <p className="text-sm text-gray-700 font-medium mb-2">첨부파일</p>
                     <button
                       onClick={() => window.open(mySubmission.fileUrl, '_blank')}
-                      className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
+                      className="flex items-center text-blue-600 hover:text-blue-800 transition"
                     >
-                      <Download size={16} />
-                      <span>내 제출 파일 다운로드</span>
+                      <Download size={16} className="mr-1" /> 제출 파일 다운로드
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* 채점 결과 및 피드백 (핵심 개선 부분) */}
+              {/* 채점 결과 */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">채점 결과</h4>
-                
+                <h4 className="font-medium text-gray-900 mb-3">채점 결과</h4>
                 {mySubmission.isGraded ? (
                   <div className="space-y-4">
-                    {/* 점수 표시 */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="bg-blue-50 border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <h5 className="text-sm font-medium text-blue-900">획득 점수</h5>
-                        <span className="text-xs text-blue-600">
-                          {formatDate(mySubmission.gradedAt)}에 채점됨
-                        </span>
+                        <span className="font-medium text-blue-900">획득 점수</span>
+                        <span className="text-xs text-blue-600">{formatDate(mySubmission.gradedAt)}</span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-2xl font-bold text-blue-600">
-                          {mySubmission.score}점
-                        </span>
-                        <span className="text-gray-600">/ {assignment.maxScore}점</span>
-                        <div className="flex-1"></div>
-                        <div className="text-right">
-                          <div className={`text-sm font-medium ${
-                            (mySubmission.score / assignment.maxScore) >= 0.8 ? 'text-green-600' :
-                            (mySubmission.score / assignment.maxScore) >= 0.6 ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {Math.round((mySubmission.score / assignment.maxScore) * 100)}%
-                          </div>
-                        </div>
-                      </div>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {mySubmission.score} / {assignment.maxScore}
+                      </p>
                     </div>
-
-                    {/* 교육자 피드백 */}
                     {mySubmission.feedback ? (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <h5 className="text-sm font-medium text-yellow-900 mb-3 flex items-center">
-                          <User size={16} className="mr-2" />
-                          교육자 피드백
-                        </h5>
-                        <div className="bg-white rounded p-3 border border-yellow-100">
-                          <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                            {mySubmission.feedback}
-                          </p>
-                        </div>
+                      <div className="bg-yellow-50 border rounded-lg p-4">
+                        <h5 className="font-medium text-yellow-900 mb-2">교육자 피드백</h5>
+                        <p className="text-gray-800 whitespace-pre-wrap">{mySubmission.feedback}</p>
                       </div>
                     ) : (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">교육자 피드백</h5>
-                        <p className="text-gray-500 text-center py-4">
-                          아직 피드백이 작성되지 않았습니다.
-                        </p>
+                      <div className="bg-gray-50 border rounded-lg p-4 text-gray-500 text-center">
+                        아직 피드백이 작성되지 않았습니다.
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                      <Clock size={20} className="text-yellow-600" />
-                      <div>
-                        <p className="font-medium text-yellow-800">채점 대기 중</p>
-                        <p className="text-sm text-yellow-700">
-                          교육자가 채점을 완료하면 결과를 확인할 수 있습니다.
-                        </p>
-                      </div>
-                    </div>
+                  <div className="bg-yellow-50 border rounded-lg p-4 flex items-center space-x-2">
+                    <Clock size={20} className="text-yellow-600" />
+                    <p className="text-yellow-700">채점 대기 중</p>
                   </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="text-center py-8">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8">
-                <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-600 mb-4 text-lg">아직 과제를 제출하지 않았습니다.</p>
-                {!assignment.isOverdue ? (
-                  <button
-                    onClick={() => setShowSubmissionForm(true)}
-                    className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-lg font-medium"
-                  >
-                    과제 제출하기
-                  </button>
-                ) : (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
-                    <AlertCircle size={20} className="mx-auto text-red-500 mb-2" />
-                    <p className="text-red-600 font-medium">과제 마감일이 지났습니다.</p>
-                    <p className="text-red-500 text-sm mt-1">더 이상 제출할 수 없습니다.</p>
-                  </div>
-                )}
-              </div>
+            <div className="bg-gray-50 border rounded-xl p-8 text-center">
+              <FileText size={40} className="mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-600 mb-4">아직 과제를 제출하지 않았습니다.</p>
+              {!assignment.isOverdue ? (
+                <button
+                  onClick={() => setShowSubmissionForm(true)}
+                  className="px-6 py-3 bg-green-500 text-white rounded-lg shadow hover:bg-green-600 transition font-medium"
+                >
+                  과제 제출하기
+                </button>
+              ) : (
+                <div className="bg-red-50 border rounded-lg p-4 mt-4">
+                  <AlertCircle size={20} className="mx-auto text-red-500 mb-2" />
+                  <p className="text-red-600 font-medium">과제 마감일이 지났습니다.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* 교육자: 제출물 목록 */}
+      {/* 교육자 제출물 관리 */}
       {currentUser.userType === 'EDUCATOR' && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">제출물 관리</h3>
+        <div className="bg-white border rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">제출물 관리</h3>
           <SubmissionList
             submissions={assignmentData.submissions || []}
             assignment={assignment}
@@ -420,7 +354,6 @@ const AssignmentDetail = ({
         </div>
       )}
 
-      {/* 채점 패널 */}
       {showGradingPanel && selectedSubmission && (
         <GradingPanel
           submission={selectedSubmission}

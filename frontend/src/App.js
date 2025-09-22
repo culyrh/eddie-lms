@@ -50,47 +50,51 @@ function App() {
   ];
 
   // ============================================================================
-  // 초기화 및 데이터 로딩 (기능 보존)
+  // 초기화 및 데이터 로딩 (수정)
   // ============================================================================
   useEffect(() => {
-    const initializeApp = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const userData = JSON.parse(localStorage.getItem('currentUser'));
-          if (userData) {
-            setCurrentUser(userData);
-            setAccessToken(token);
-            await loadClassrooms();
-          }
-        } catch (error) {
-          console.error('초기화 실패:', error);
-          handleLogout();
-        }
+    // 로그인 상태 복원
+    const savedUser = localStorage.getItem('currentUser');
+    const savedToken = localStorage.getItem('token');
+    
+    if (savedUser && savedToken) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setCurrentUser(parsedUser);
+        setAccessToken(savedToken);
+      } catch (error) {
+        console.error('사용자 정보 복원 실패:', error);
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('token');
       }
-      setIsLoading(false);
-    };
-
-    initializeApp();
+    }
+    
+    setIsLoading(false);
   }, []);
 
+  // 사용자 로그인시 클래스룸 데이터 로드
+  useEffect(() => {
+    if (currentUser && accessToken) {
+      loadClassrooms();
+    }
+  }, [currentUser, accessToken]);
+
   // ============================================================================
-  // 인증 관련 함수들 (기능 보존)
+  // 이벤트 핸들러들 (기능 보존 및 수정)
   // ============================================================================
+
   const handleLogin = async (loginData) => {
     try {
-      const { email, password } = loginData;
-      const data = await authApi.login(email, password);
-
-      if (data && data.accessToken && data.user) {
-        localStorage.setItem('token', data.accessToken);
-        localStorage.setItem('currentUser', JSON.stringify(data.user));
-
-        setAccessToken(data.accessToken);
-        setCurrentUser(data.user);
+      const response = await authApi.login(loginData.email, loginData.password);
+      
+      if (response && response.user && response.accessToken) {
+        setCurrentUser(response.user);
+        setAccessToken(response.accessToken);
+        
+        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        localStorage.setItem('token', response.accessToken);
+        
         setShowLoginModal(false);
-
-        alert(data.message || '로그인에 성공했습니다!');
         await loadClassrooms();
       } else {
         throw new Error('서버에서 올바른 응답을 받지 못했습니다.');
@@ -101,29 +105,18 @@ function App() {
     }
   };
 
-  const handleSignup = async (userData) => {
+  const handleSignup = async (signupData) => {
     try {
-      try {
-        const isDuplicate = await authApi.checkEmailDuplicate(userData.email);
-        if (isDuplicate) {
-          alert('이미 사용 중인 이메일입니다.');
-          return;
-        }
-      } catch (error) {
-        console.warn('이메일 중복 체크 실패:', error);
-      }
-
-      const data = await authApi.signup(userData);
-
-      if (data && data.accessToken && data.user) {
-        localStorage.setItem('token', data.accessToken);
-        localStorage.setItem('currentUser', JSON.stringify(data.user));
-
-        setAccessToken(data.accessToken);
-        setCurrentUser(data.user);
+      const response = await authApi.signup(signupData);
+      
+      if (response && response.user && response.accessToken) {
+        setCurrentUser(response.user);
+        setAccessToken(response.accessToken);
+        
+        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        localStorage.setItem('token', response.accessToken);
+        
         setShowSignupModal(false);
-
-        alert(data.message || '회원가입에 성공했습니다!');
         await loadClassrooms();
       } else {
         throw new Error('서버에서 올바른 응답을 받지 못했습니다.');
@@ -150,9 +143,11 @@ function App() {
   };
 
   // ============================================================================
-  // 클래스룸 관련 함수들 (기능 보존)
+  // 클래스룸 관련 함수들 (기능 보존 및 수정)
   // ============================================================================
   const loadClassrooms = async () => {
+    if (!currentUser) return;
+    
     try {
       const classroomData = await classroomApi.getClassrooms(accessToken);
       setClassrooms(classroomData || []);
@@ -213,7 +208,7 @@ function App() {
   };
 
   // ============================================================================
-  // 모달 컴포넌트 (UI만 라이트 톤으로 변경)
+  // 모달 컴포넌트 (기존 그대로)
   // ============================================================================
   const CreateClassroomModal = () => (
     <div className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm flex items-center justify-center">
@@ -237,23 +232,36 @@ function App() {
                 name="name"
                 type="text"
                 required
-                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                 placeholder="클래스룸 이름을 입력하세요"
               />
             </div>
+            
             <div>
-              <label className="block text-gray-600 text-sm mb-2">설명</label>
+              <label className="block text-gray-600 text-sm mb-2">설명 (선택사항)</label>
               <textarea
                 name="description"
-                rows={3}
-                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="클래스룸 설명을 입력하세요"
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-none"
+                rows="3"
+                placeholder="클래스룸에 대한 설명을 입력하세요"
               />
             </div>
           </div>
-          <div className="flex gap-3 mt-6">
-            <button type="submit" className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">생성</button>
-            <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">취소</button>
+          
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              생성
+            </button>
           </div>
         </form>
       </div>
@@ -274,19 +282,31 @@ function App() {
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-gray-600 text-sm mb-2">참여 코드</label>
+              <label className="block text-gray-600 text-sm mb-2">클래스룸 코드</label>
               <input
                 name="code"
                 type="text"
                 required
-                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="참여 코드를 입력하세요"
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                placeholder="클래스룸 코드를 입력하세요"
               />
             </div>
           </div>
-          <div className="flex gap-3 mt-6">
-            <button type="submit" className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">참여</button>
-            <button type="button" onClick={() => setShowJoinModal(false)} className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">취소</button>
+          
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={() => setShowJoinModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              참여
+            </button>
           </div>
         </form>
       </div>
@@ -294,53 +314,7 @@ function App() {
   );
 
   // ============================================================================
-  // 페이지 렌더링 (기능 보존)
-  // ============================================================================
-  const renderCurrentPage = () => {
-    if (!selectedClassroom) {
-      return (
-        <div className="bg-white rounded-xl p-8 m-6 text-center shadow">
-          <div className="text-6xl mb-4">🏠</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">EDDIE에 오신 것을 환영합니다!</h2>
-          <p className="text-gray-600 mb-6">클래스룸을 선택하거나 새로 만들어 학습을 시작하세요.</p>
-          <div className="flex justify-center gap-3">
-            <button className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600" onClick={() => setShowCreateModal(true)}>클래스룸 만들기</button>
-            <button className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300" onClick={() => setShowJoinModal(true)}>클래스룸 참여</button>
-          </div>
-        </div>
-      );
-    }
-
-    const commonProps = {
-      classroomId: selectedClassroom.classroomId,
-      currentUser,
-      accessToken,
-      classroom: selectedClassroom
-    };
-
-    switch (currentPage) {
-      case 'board':
-        return <BoardPage {...commonProps} />;
-      case 'lesson':
-        return <LessonPage {...commonProps} />;
-      case 'assignment':
-        return <AssignmentPage {...commonProps} />;
-      case 'quiz':
-        return <QuizPage {...commonProps} />;
-      case 'member':
-        return (
-          <div className="bg-white rounded-xl p-6 m-6 shadow">
-            <h2 className="text-xl font-semibold text-gray-900">멤버 페이지</h2>
-            <p className="text-gray-600">멤버 관리 기능이 곧 추가됩니다.</p>
-          </div>
-        );
-      default:
-        return <BoardPage {...commonProps} />;
-    }
-  };
-
-  // ============================================================================
-  // 로딩 화면 (UI만 라이트 톤)
+  // 로딩 화면 (기존 그대로)
   // ============================================================================
   if (isLoading) {
     return (
@@ -355,7 +329,7 @@ function App() {
   }
 
   // ============================================================================
-  // 로그인 페이지 (비로그인 상태) - UI만 라이트 톤
+  // 로그인 페이지 (비로그인 상태) - 기존 그대로
   // ============================================================================
   if (!currentUser) {
     return (
@@ -379,7 +353,8 @@ function App() {
           <div className="bg-white rounded-xl p-12 text-center shadow max-w-2xl">
             <div className="text-8xl mb-6">🎓</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">차세대 학습 플랫폼</h2>
-            <p className="text-gray-600 mb-8">EDDIE와 함께 더 스마트하고 효율적인 학습 경험을 만나보세요. 실시간 소통, 과제 관리, 퀴즈 시스템까지 모든 것이 하나로.</p>
+            <p className="text-gray-600 mb-8">EDDIE와 함께 더 스마트하고 효율적인 학습 경험을 만나보세요.
+            <br />실시간 소통, 과제 관리, 퀴즈 시스템까지 모든 것이 하나로.</p>
             <div className="flex justify-center gap-3">
               <button onClick={() => setShowSignupModal(true)} className="px-6 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600">🚀 시작하기</button>
               <button onClick={() => setShowLoginModal(true)} className="px-6 py-2 rounded-lg bg-gray-200 hover:bg-gray-300">로그인</button>
@@ -412,10 +387,10 @@ function App() {
   }
 
   // ============================================================================
-  // 메인 애플리케이션 (로그인된 상태) - UI만 라이트 톤
+  // 메인 애플리케이션 (로그인된 상태) - 기존 3단 레이아웃 복원
   // ============================================================================
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 상단바 */}
       {currentUser && (
         <TopNavBar user={currentUser} onLogout={handleLogout} onProfileClick={() => setShowProfilePage(true)} />
@@ -428,100 +403,255 @@ function App() {
         </div>
       )}
 
-      {/* 클래스룸 생성/참여 모달 */}
-      {showCreateModal && <CreateClassroomModal />}
-      {showJoinModal && <JoinClassroomModal />}
-
-      <div className="flex h-screen pt-16">
-        {/* 사이드바 */}
-        <aside className="w-64 bg-white border-r border-gray-200 shadow-sm">
-          {/* 사이드바 헤더 */}
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-blue-600">EDDIE</h2>
-            <p className="text-gray-500 text-sm">학습 관리 시스템</p>
-          </div>
-
-          {/* 네비게이션 메뉴 */}
-          <div className="p-4">
-            <div className="space-y-2">
-              {sidebarItems.map((item, index) => {
+      {/* 메인 3단 레이아웃 */}
+      <div className="flex flex-1 h-screen pt-16">
+        {/* 왼쪽 사이드바 */}
+        <div className="w-64 bg-white border-r border-gray-200 p-4">
+          {/* 홈 섹션 */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-500 mb-3">NAVIGATION</h3>
+            <nav className="space-y-1">
+              {sidebarItems.map((item) => {
                 const IconComponent = item.icon;
                 return (
                   <button
-                    key={index}
-                    onClick={() => item.label === '홈' && setSelectedClassroom(null)}
-                    className={`flex items-center w-full px-3 py-2 rounded-lg transition ${item.active ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                    key={item.label}
+                    onClick={() => setSelectedClassroom(null)}
+                    className={`flex items-center w-full p-3 rounded-lg text-left transition-colors ${
+                      item.active
+                        ? 'bg-blue-500 text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
-                    <IconComponent size={20} />
-                    <span className="ml-3">{item.label}</span>
+                    <IconComponent size={20} className="mr-3" />
+                    {item.label}
                   </button>
                 );
               })}
-            </div>
+            </nav>
           </div>
 
-          {/* 클래스룸 목록 */}
-          <div className="p-4 border-t border-gray-200">
+          {/* 클래스룸 섹션 */}
+          <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-gray-600 text-sm font-medium">내 클래스룸</h3>
+              <h3 className="text-sm font-semibold text-gray-500">CLASSROOMS</h3>
               <div className="flex gap-1">
-                <button onClick={() => setShowCreateModal(true)} className="text-gray-500 hover:text-gray-700 text-xs p-1" title="새 클래스룸">➕</button>
-                <button onClick={() => setShowJoinModal(true)} className="text-gray-500 hover:text-gray-700 text-xs p-1" title="클래스룸 참여">🔗</button>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="p-1 text-gray-400 hover:text-blue-500 text-xs"
+                  title="생성"
+                >
+                  ➕
+                </button>
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  className="p-1 text-gray-400 hover:text-blue-500 text-xs"
+                  title="참여"
+                >
+                  🔗
+                </button>
               </div>
             </div>
-            <div className="space-y-2">
-              {classrooms.map((classroom) => (
-                <button
-                  key={classroom.classroomId}
-                  onClick={() => setSelectedClassroom(classroom)}
-                  className={`block w-full text-left px-3 py-2 rounded-lg truncate ${selectedClassroom?.classroomId === classroom.classroomId ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100 text-gray-700'}`}
-                >
-                  {classroom.classroomName}
-                </button>
-              ))}
-
-              {classrooms.length === 0 && (
-                <div className="text-gray-400 text-sm text-center py-4">클래스룸이 없습니다</div>
+            
+            {/* 클래스룸 목록 */}
+            <div className="space-y-1">
+              {classrooms.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">
+                  아직 참여한<br />클래스룸이 없습니다
+                </p>
+              ) : (
+                classrooms.map((classroom) => (
+                  <button
+                    key={classroom.classroomId || classroom.id}
+                    onClick={() => setSelectedClassroom(classroom)}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      selectedClassroom?.classroomId === classroom.classroomId
+                        ? 'bg-blue-50 border border-blue-200 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="font-medium text-sm truncate">
+                      {classroom.classroomName || classroom.title}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {classroom.description || '설명 없음'}
+                    </div>
+                  </button>
+                ))
               )}
             </div>
           </div>
-        </aside>
+        </div>
 
-        {/* 메인 콘텐츠 */}
-        <div className="flex-1 flex flex-col">
-          {/* 클래스룸 탭 (클래스룸 선택 시에만 표시) */}
-          {selectedClassroom && (
-            <div className="bg-white m-6 mb-0 p-4 rounded-xl shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{selectedClassroom.classroomName}</h2>
-                  <p className="text-gray-600">{selectedClassroom.description}</p>
+        {/* 중앙 콘텐츠 영역 */}
+        <div className="flex-1">
+          {selectedClassroom ? (
+            <div className="flex h-full">
+              {/* 탭 영역 (위쪽) */}
+              <div className="w-full">
+                {/* 탭 헤더 */}
+                <div className="bg-white border-b border-gray-200 px-6 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {selectedClassroom.classroomName || selectedClassroom.title}
+                    </h2>
+                  </div>
+                  
+                  {/* 탭 네비게이션 */}
+                  <nav className="flex space-x-1">
+                    {classroomTabs.map((tab) => {
+                      const IconComponent = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setCurrentPage(tab.id)}
+                          className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            currentPage === tab.id
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <IconComponent size={16} className="mr-2" />
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+
+                {/* 탭 콘텐츠 */}
+                <div className="h-full">
+                  {currentPage === 'board' && (
+                    <BoardPage
+                      classroomId={selectedClassroom.classroomId || selectedClassroom.id}
+                      currentUser={currentUser}
+                      accessToken={accessToken}
+                    />
+                  )}
+                  {currentPage === 'assignment' && (
+                    <AssignmentPage
+                      classroomId={selectedClassroom.classroomId || selectedClassroom.id}
+                      currentUser={currentUser}
+                      accessToken={accessToken}
+                    />
+                  )}
+                  {currentPage === 'quiz' && (
+                    <QuizPage
+                      classroomId={selectedClassroom.classroomId || selectedClassroom.id}
+                      currentUser={currentUser}
+                      accessToken={accessToken}
+                    />
+                  )}
+                  {currentPage === 'lesson' && (
+                    <LessonPage
+                      classroomId={selectedClassroom.classroomId || selectedClassroom.id}
+                      currentUser={currentUser}
+                      accessToken={accessToken}
+                    />
+                  )}
+                  {currentPage === 'member' && (
+                    <div className="p-8">
+                      <h2 className="text-2xl font-bold mb-4">멤버 관리</h2>
+                      <p className="text-gray-600">멤버 관리 기능은 준비 중입니다.</p>
+                    </div>
+                  )}
                 </div>
               </div>
+            </div>
+          ) : (
+            // 클래스룸 선택되지 않은 상태 - 홈 화면 (클래스룸 카드들 표시)
+            <div className="p-6">
+              <div className="max-w-6xl mx-auto">
+                <div className="mb-8">
+                  <h1 className="text-3xl font-bold text-gray-900 mb-2">내 클래스룸</h1>
+                  <p className="text-gray-600">참여중인 클래스룸 목록입니다.</p>
+                </div>
 
-              <div className="flex gap-2">
-                {classroomTabs.map((tab) => {
-                  const IconComponent = tab.icon;
-                  const active = currentPage === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setCurrentPage(tab.id)}
-                      className={`flex items-center px-4 py-2 rounded-lg border ${active ? 'bg-blue-500 text-white border-blue-500' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                {/* 클래스룸 카드 그리드 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {/* 클래스룸 생성 카드 */}
+                  <div className="bg-white rounded-xl border-2 border-dashed border-blue-300 p-6 hover:bg-blue-50 transition-colors cursor-pointer"
+                       onClick={() => setShowCreateModal(true)}>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">➕</span>
+                      </div>
+                      <h3 className="text-lg font-semibold text-blue-800 mb-2">새 클래스룸</h3>
+                      <p className="text-blue-600 text-sm">클래스룸을 생성하세요</p>
+                    </div>
+                  </div>
+
+                  {/* 클래스룸 참여 카드 */}
+                  <div className="bg-white rounded-xl border-2 border-dashed border-green-300 p-6 hover:bg-green-50 transition-colors cursor-pointer"
+                       onClick={() => setShowJoinModal(true)}>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl">🔗</span>
+                      </div>
+                      <h3 className="text-lg font-semibold text-green-800 mb-2">클래스룸 참여</h3>
+                      <p className="text-green-600 text-sm">코드로 참여하세요</p>
+                    </div>
+                  </div>
+
+                  {/* 실제 클래스룸 카드들 */}
+                  {classrooms.map((classroom, index) => (
+                    <div 
+                      key={classroom.classroomId || classroom.id}
+                      className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all cursor-pointer transform hover:-translate-y-1"
+                      onClick={() => setSelectedClassroom(classroom)}
                     >
-                      <IconComponent size={16} />
-                      <span className="ml-2">{tab.label}</span>
-                    </button>
-                  );
-                })}
+                      <div className="text-center">
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <span className="text-2xl text-white">📚</span>
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2 truncate">
+                          {classroom.classroomName || classroom.title}
+                        </h3>
+                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                          {classroom.description || '설명이 없습니다.'}
+                        </p>
+                        <div className="flex items-center justify-center text-xs text-gray-500">
+                          <span>👥 멤버 {classroom.memberCount || 0}명</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 클래스룸이 없을 때 메시지 */}
+                {classrooms.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">📚</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">클래스룸이 없습니다</h2>
+                    <p className="text-gray-600 mb-6">
+                      새로운 클래스룸을 생성하거나<br />
+                      기존 클래스룸에 참여해보세요.
+                    </p>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        클래스룸 생성
+                      </button>
+                      <button
+                        onClick={() => setShowJoinModal(true)}
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                      >
+                        클래스룸 참여
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {/* 페이지 콘텐츠 */}
-          <div className="flex-1 overflow-auto">{renderCurrentPage()}</div>
         </div>
       </div>
+
+      {/* 클래스룸 생성/참여 모달 */}
+      {showCreateModal && <CreateClassroomModal />}
+      {showJoinModal && <JoinClassroomModal />}
     </div>
   );
 }
