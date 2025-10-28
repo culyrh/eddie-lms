@@ -57,6 +57,7 @@ dependencies {
 
 	// .env - spring boot Dotenv
 	implementation 'me.paulschwarz:spring-dotenv:2.5.4'
+	implementation 'io.github.cdimascio:dotenv-java:3.0.2'
 
 
 	// Swagger/OpenAPI 3.0 (SpringDoc)
