@@ -162,12 +162,7 @@ const AssignmentPage = ({ classroomId, currentUser, accessToken }) => {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">과제 관리</h2>
-          <p className="text-gray-600 mt-1">
-            {currentUser.userType === 'EDUCATOR'
-              ? '과제를 등록하고 학습자들의 제출물을 관리하세요.'
-              : '등록된 과제를 확인하고 제출하세요.'}
-          </p>
+          <h2 className="text-3xl font-extrabold text-gray-900">과제</h2>
         </div>
 
         {currentUser.userType === 'EDUCATOR' && (
